@@ -66,3 +66,4 @@
 {"id":"cash_box","title":"Daily Cash Box","category":"Valuables","iconKey":"payments","zoneEffects":{"N":{"zoneId":"N","status":"GOOD","note":"Multiplies daily flow."},"SE":{"zoneId":"SE","status":"GOOD","note":"Keeps cash liquid and active."},"SSW":{"zoneId":"SSW","status":"BAD","note":"Cash disappears quickly."}}},
 {"id":"safe_deposit","title":"Heavy Safe Deposit","category":"Valuables","iconKey":"account_balance","zoneEffects":{"SW":{"zoneId":"SW","status":"GOOD","note":"Protects long-term wealth. Open facing North."},"NE":{"zoneId":"NE","status":"BAD","note":"Unnecessary heavy burden on the mind."}}}
 ]
+}
