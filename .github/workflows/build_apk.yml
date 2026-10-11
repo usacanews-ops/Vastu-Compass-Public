@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
       - name: Setup Java JDK 17
@@ -18,19 +18,19 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Setup Gradle Cache
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Generate and Make gradlew Executable
+      - name: Generate Gradle Wrapper (Version Locked)
         run: |
-          gradle wrapper
+          gradle wrapper --gradle-version 8.6
           chmod +x gradlew
 
-      - name: Build Android APK
+      - name: Build Android Release APK
         run: ./gradlew :composeApp:assembleRelease --stacktrace
 
-      - name: Upload Artifact
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vastu-compass-apk
+          name: vastu-compass-release-apk
           path: composeApp/build/outputs/apk/release/*.apk
