@@ -9,8 +9,11 @@ import com.vastu.compass.storage.storageContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Context bindings required by expect/actual sensor and storage Singletons
         sensorContext = applicationContext
         storageContext = applicationContext
+
         setContent {
             App()
         }
