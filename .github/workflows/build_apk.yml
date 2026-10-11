@@ -1,25 +1,36 @@
 name: Build Release APK
+
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v3
-      - name: Ensure Gradle Wrapper Executable
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Generate and Make gradlew Executable
         run: |
           gradle wrapper
           chmod +x gradlew
-      - name: Build APK
+
+      - name: Build Android APK
         run: ./gradlew :composeApp:assembleRelease --stacktrace
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: vastu-compass-release-apk
+          name: vastu-compass-apk
           path: composeApp/build/outputs/apk/release/*.apk
