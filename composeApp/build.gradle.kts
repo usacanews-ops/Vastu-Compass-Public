@@ -20,27 +20,40 @@ kotlin {
     }
 
     sourceSets {
-        getByName("commonMain").dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material)
-            implementation(compose.materialIconsExtended)
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-            implementation("io.ktor:ktor-client-core:2.3.8")
-            implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
-            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
+        val commonMain = maybeCreate("commonMain").apply {
+            dependencies {
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.material)
+                implementation(compose.materialIconsExtended)
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+                implementation("io.ktor:ktor-client-core:2.3.8")
+                implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
+            }
         }
         
-        getByName("androidMain").dependencies {
-            implementation("androidx.activity:activity-compose:1.8.2")
-            implementation("androidx.appcompat:appcompat:1.6.1")
-            implementation("io.ktor:ktor-client-okhttp:2.3.8")
+        maybeCreate("androidMain").apply {
+            dependencies {
+                implementation("androidx.activity:activity-compose:1.8.2")
+                implementation("androidx.appcompat:appcompat:1.6.1")
+                implementation("io.ktor:ktor-client-okhttp:2.3.8")
+            }
         }
         
-        getByName("iosMain").dependencies {
-            implementation("io.ktor:ktor-client-darwin:2.3.8")
+        // Safely find or create iosMain and apply dependencies
+        val iosMain = maybeCreate("iosMain").apply {
+            dependsOn(commonMain)
+            dependencies {
+                implementation("io.ktor:ktor-client-darwin:2.3.8")
+            }
         }
+        
+        // Manually link the specific iOS architectures to the shared iosMain
+        maybeCreate("iosX64Main").dependsOn(iosMain)
+        maybeCreate("iosArm64Main").dependsOn(iosMain)
+        maybeCreate("iosSimulatorArm64Main").dependsOn(iosMain)
     }
 }
 
