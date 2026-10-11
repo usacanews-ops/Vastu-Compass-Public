@@ -20,30 +20,26 @@ kotlin {
     }
 
     sourceSets {
-        val commonMain by getting {
-            dependencies {
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material)
-                implementation(compose.materialIconsExtended)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-                implementation("io.ktor:ktor-client-core:2.3.8")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
-            }
+        getByName("commonMain").dependencies {
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material)
+            implementation(compose.materialIconsExtended)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+            implementation("io.ktor:ktor-client-core:2.3.8")
+            implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
         }
-        val androidMain by getting {
-            dependencies {
-                implementation("androidx.activity:activity-compose:1.8.2")
-                implementation("androidx.appcompat:appcompat:1.6.1")
-                implementation("io.ktor:ktor-client-okhttp:2.3.8")
-            }
+        
+        getByName("androidMain").dependencies {
+            implementation("androidx.activity:activity-compose:1.8.2")
+            implementation("androidx.appcompat:appcompat:1.6.1")
+            implementation("io.ktor:ktor-client-okhttp:2.3.8")
         }
-        val iosMain by getting {
-            dependencies {
-                implementation("io.ktor:ktor-client-darwin:2.3.8")
-            }
+        
+        getByName("iosMain").dependencies {
+            implementation("io.ktor:ktor-client-darwin:2.3.8")
         }
     }
 }
