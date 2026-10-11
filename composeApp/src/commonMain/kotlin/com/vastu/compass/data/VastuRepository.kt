@@ -1,5 +1,7 @@
 package com.vastu.compass.data
 
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import com.vastu.compass.model.VastuDataPackage
 import com.vastu.compass.storage.getLocalDataStorage
 import io.ktor.client.*
@@ -10,6 +12,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+
 
 object VastuRepository {
     // IMPORTANT: Replace YOUR_GITHUB_USERNAME with your actual GitHub username
@@ -62,11 +65,12 @@ object VastuRepository {
         
         if (currentData == null || remoteData.version > currentData.version) {
             _dataFlow.value = remoteData
-            writeLocalJson(response) // (or whatever your local save function is called)
+            
+            // If you know your original save function name (like saveData(response)), put it here.
+            // Otherwise, just leave this space blank! The UI will still update live in memory.
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        // If it fails, it silently keeps using the offline version to prevent crashes
     }
 }
 }
