@@ -10,19 +10,27 @@ import platform.darwin.NSObject
 
 class IosCompassSensor : CompassSensor {
     private val locationManager = CLLocationManager()
+
     override val azimuthDegrees: Flow<Float> = callbackFlow {
         val delegate = object : NSObject(), CLLocationManagerDelegateProtocol {
             override fun locationManager(manager: CLLocationManager, didUpdateHeading: CLHeading) {
-                val deg = if (didUpdateHeading.trueHeading >= 0) didUpdateHeading.trueHeading.toFloat() else didUpdateHeading.magneticHeading.toFloat()
+                val deg = if (didUpdateHeading.trueHeading >= 0) {
+                    didUpdateHeading.trueHeading.toFloat()
+                } else {
+                    didUpdateHeading.magneticHeading.toFloat()
+                }
                 trySend(deg)
             }
         }
+
         locationManager.delegate = delegate
         locationManager.startUpdatingHeading()
+
         awaitClose {
             locationManager.stopUpdatingHeading()
             locationManager.delegate = null
         }
     }
 }
+
 actual fun getCompassSensor(): CompassSensor = IosCompassSensor()
