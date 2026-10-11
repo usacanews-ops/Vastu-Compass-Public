@@ -15,6 +15,7 @@ import com.vastu.compass.ui.CompassScreen
 import com.vastu.compass.ui.ItemDetailScreen
 import com.vastu.compass.ui.ProblemsScreen
 import com.vastu.compass.ui.ZonesScreen
+import com.vastu.compass.ui.MoreScreen
 
 sealed class Screen {
     object Compass : Screen()
@@ -69,7 +70,7 @@ fun App() {
                 is Screen.Zones -> ZonesScreen(onItemClick = { itemId -> currentScreen = Screen.ItemDetail(itemId) })
                 is Screen.ItemDetail -> ItemDetailScreen(itemId = screen.itemId, onBack = { currentScreen = Screen.Zones })
                 is Screen.Problems -> ProblemsScreen()
-                is Screen.More -> Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("More Settings & Profile") }
+                is Screen.More -> MoreScreen() // Now points to our new UI
             }
         }
     }
