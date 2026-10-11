@@ -9,11 +9,11 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-class AndroidCompassSensor(context: Context) : CompassSensor {
+class AndroidCompassSensor(private val context: Context) : CompassSensor {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
     override val azimuthDegrees: Flow<Float> = callbackFlow {
-        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        val rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         val rotationMatrix = FloatArray(9)
         val orientation = FloatArray(3)
 
@@ -27,12 +27,15 @@ class AndroidCompassSensor(context: Context) : CompassSensor {
                     trySend(azimuth)
                 }
             }
+
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
-        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+
+        sensorManager.registerListener(listener, rotationSensor, SensorManager.SENSOR_DELAY_UI)
         awaitClose { sensorManager.unregisterListener(listener) }
     }
 }
 
 lateinit var sensorContext: Context
+
 actual fun getCompassSensor(): CompassSensor = AndroidCompassSensor(sensorContext)
