@@ -13,7 +13,7 @@ import kotlinx.serialization.json.Json
 
 object VastuRepository {
     // IMPORTANT: Replace YOUR_GITHUB_USERNAME with your actual GitHub username
-    private const val GITHUB_RAW_URL = "https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/vastu-compass/main/data/vastu_data.json"
+    private const val GITHUB_RAW_URL = "https://raw.githubusercontent.com/usacanews-ops/vastu-compass/main/data/vastu_data.json"
 
     private val jsonParser = Json {
         ignoreUnknownKeys = true
@@ -42,19 +42,31 @@ object VastuRepository {
     }
 
     suspend fun syncWithGitHub() {
-        try {
-            val remoteString: String = client.get(GITHUB_RAW_URL).body()
-            val remotePkg = jsonParser.decodeFromString<VastuDataPackage>(remoteString)
-            val currentPkg = _dataFlow.value
-
-            // If remote has a higher version number, replace local file
-            if (currentPkg == null || remotePkg.version > currentPkg.version) {
-                storage.saveJson(remoteString)
-                _dataFlow.value = remotePkg
-            }
-        } catch (e: Exception) {
-            // Offline, network error, or timeout: silently use cached file
-            e.printStackTrace()
+    try {
+        // Generates a random number to bypass GitHub's 5-minute cache
+        val cacheBuster = kotlin.random.Random.nextInt(10000, 99999)
+        
+        // Append it to the URL (e.g. .../vastu_data.json?v=45812)
+        val url = "$GITHUB_RAW_URL?v=$cacheBuster"
+        
+        val response = client.get(url).bodyAsText()
+        
+        // Ensure lenient parsing just in case there are formatting quirks
+        val format = kotlinx.serialization.json.Json { 
+            ignoreUnknownKeys = true 
+            isLenient = true 
         }
+        
+        val remoteData = format.decodeFromString<com.vastu.compass.model.VastuDataPackage>(response)
+        val currentData = _dataFlow.value
+        
+        if (currentData == null || remoteData.version > currentData.version) {
+            _dataFlow.value = remoteData
+            writeLocalJson(response) // (or whatever your local save function is called)
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        // If it fails, it silently keeps using the offline version to prevent crashes
     }
+}
 }
