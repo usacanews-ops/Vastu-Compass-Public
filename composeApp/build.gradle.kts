@@ -7,6 +7,7 @@ plugins {
 
 kotlin {
     androidTarget()
+
     listOf(
         iosX64(),
         iosArm64(),
@@ -50,6 +51,7 @@ kotlin {
 android {
     namespace = "com.vastu.compass"
     compileSdk = 34
+
     defaultConfig {
         applicationId = "com.vastu.compass"
         minSdk = 24
@@ -57,11 +59,14 @@ android {
         versionCode = 1
         versionName = "1.0.0"
     }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
