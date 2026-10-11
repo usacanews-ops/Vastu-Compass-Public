@@ -18,16 +18,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle Cache
+      # This strictly enforces Gradle 8.5 and overrides the failing 9.8.0 system default
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
 
-      - name: Generate Gradle Wrapper (Version Locked)
-        run: |
-          gradle wrapper --gradle-version 8.6
-          chmod +x gradlew
-
+      # We use 'gradle' directly instead of './gradlew' to bypass wrapper issues
       - name: Build Android Release APK
-        run: ./gradlew :composeApp:assembleRelease --stacktrace
+        run: gradle :composeApp:assembleRelease --stacktrace
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
