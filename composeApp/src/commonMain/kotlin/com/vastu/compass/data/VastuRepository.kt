@@ -2,18 +2,18 @@ package com.vastu.compass.data
 
 import com.vastu.compass.model.VastuDataPackage
 import com.vastu.compass.storage.getLocalDataStorage
-io.ktor.client.*
-io.ktor.client.call.*
-io.ktor.client.plugins.contentnegotiation.*
-io.ktor.client.request.*
-io.ktor.serialization.kotlinx.json.*
-kotlinx.coroutines.flow.MutableStateFlow
-kotlinx.coroutines.flow.asStateFlow
-kotlinx.serialization.json.Json
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
 
 object VastuRepository {
-    // Update this with your GitHub username and repository name
-    private const val GITHUB_RAW_URL = "https://raw.githubusercontent.com/satinder-singh/vastu-compass/main/data/vastu_data.json"
+    // IMPORTANT: Replace YOUR_GITHUB_USERNAME with your actual GitHub username
+    private const val GITHUB_RAW_URL = "https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/vastu-compass/main/data/vastu_data.json"
 
     private val jsonParser = Json {
         ignoreUnknownKeys = true
