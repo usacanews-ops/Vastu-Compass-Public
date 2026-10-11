@@ -4,7 +4,8 @@ import android.content.Context
 import java.io.File
 
 class AndroidLocalDataStorage(private val context: Context) : LocalDataStorage {
-    private val file: File get() = File(context.filesDir, "vastu_data.json")
+    private val file: File
+        get() = File(context.filesDir, "vastu_data.json")
 
     override fun saveJson(content: String) {
         file.writeText(content)
@@ -24,4 +25,5 @@ class AndroidLocalDataStorage(private val context: Context) : LocalDataStorage {
 }
 
 lateinit var storageContext: Context
+
 actual fun getLocalDataStorage(): LocalDataStorage = AndroidLocalDataStorage(storageContext)
