@@ -16,7 +16,7 @@ import kotlinx.serialization.json.Json
 
 object VastuRepository {
     // IMPORTANT: Replace YOUR_GITHUB_USERNAME with your actual GitHub username
-    private const val GITHUB_RAW_URL = "https://raw.githubusercontent.com/usacanews-ops/vastu-compass/main/data/vastu_data.json"
+    private const val GITHUB_RAW_URL = "https://gist.githubusercontent.com/usacanews-ops/8d7a7e64f202f9434bf33da86e0bf409/raw/562f3d650d56e0d2228102dcfee5d4be0f67ed32/vastu_data.json"
 
     private val jsonParser = Json {
         ignoreUnknownKeys = true
