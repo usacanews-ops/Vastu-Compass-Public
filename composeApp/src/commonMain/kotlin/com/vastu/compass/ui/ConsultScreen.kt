@@ -60,7 +60,7 @@ fun ConsultScreen(onBack: () -> Unit) {
         try {
             val client = HttpClient()
             // Replace with your permanent raw Gist URL for consult_config.json
-            val configUrl = "https://gist.githubusercontent.com/usacanews-ops/REPLACE_WITH_CONSULT_GIST_ID/raw/consult_config.json"
+            val configUrl = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/consult_config.json"
             val response = client.get(configUrl).bodyAsText()
             val parsedData = Json { ignoreUnknownKeys = true; isLenient = true }.decodeFromString<ConsultConfig>(response)
             fetchState = FetchState.Success(parsedData)
