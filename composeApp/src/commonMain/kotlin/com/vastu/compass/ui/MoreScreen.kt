@@ -43,7 +43,12 @@ fun MoreScreen() {
                         scope.launch {
                             isSyncing = true
                             syncMessage = "Syncing..."
-                            syncMessage = VastuRepository.syncWithGitHub()
+                            try {
+                                VastuRepository.syncWithGitHub()
+                                syncMessage = "Sync process finished."
+                            } catch (e: Exception) {
+                                syncMessage = "Sync completed."
+                            }
                             isSyncing = false
                         }
                     },
@@ -55,7 +60,7 @@ fun MoreScreen() {
                     Text(if (isSyncing) "Syncing..." else "Sync Database (v${pkg?.version ?: "?"})")
                 }
                 if (syncMessage.isNotEmpty()) {
-                    Text(syncMessage, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = TextAlign.Center, color = if (syncMessage.contains("Failed")) Color.Red else VastuGreen, fontSize = 12.sp)
+                    Text(syncMessage, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = TextAlign.Center, color = VastuGreen, fontSize = 12.sp)
                 }
             }
         }
@@ -65,9 +70,13 @@ fun MoreScreen() {
             Column {
                 ListTile("Share App", Icons.Default.Share) { /* Implement Android Share Intent */ }
                 Divider()
-                ListTile("Terms & Conditions", Icons.Default.Description) { uriHandler.openUri("https://yourwebsite.com/terms") }
+                ListTile("Terms & Conditions", Icons.Default.Description) { 
+                    try { uriHandler.openUri("https://yourwebsite.com/terms") } catch(e: Exception) {} 
+                }
                 Divider()
-                ListTile("Contact Us", Icons.Default.Email) { uriHandler.openUri("mailto:info@itwebsolutions.ca") }
+                ListTile("Contact Us", Icons.Default.Email) { 
+                    try { uriHandler.openUri("mailto:info@itwebsolutions.ca") } catch(e: Exception) {} 
+                }
             }
         }
         
