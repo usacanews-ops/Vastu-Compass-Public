@@ -1,5 +1,7 @@
 package com.vastu.compass.ui
 
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
