@@ -61,7 +61,7 @@ fun ConsultScreen(onBack: () -> Unit) {
         try {
             val client = HttpClient()
             // TODO: Replace this URL with your actual live server/gist JSON link
-            val url = "https://gist.githubusercontent.com/your-live-consult-config.json"
+            val url = "https://gist.githubusercontent.com/usacanews-ops/eee6afde8394e822cff9a4a75dc854b9/raw/f89597c5e6939216b12dfe8c7be3bcd4cd31de5c/consult_config.json"
             
             // For right now, this URL will fail and trigger your custom Error UI. 
             // When you want to see the UI succeed, uncomment the mock data below:
