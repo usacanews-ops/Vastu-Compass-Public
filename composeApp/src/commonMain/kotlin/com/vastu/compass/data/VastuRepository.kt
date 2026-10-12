@@ -12,7 +12,7 @@ import kotlin.random.Random
 
 object VastuRepository {
     // Replace with your permanent raw Gist URL (ensure commit hash is removed from between /raw/ and filename)
-    private const val GITHUB_RAW_URL = "https://gist.githubusercontent.com/usacanews-ops/REPLACE_WITH_GIST_ID/raw/vastu_data.json"
+    private const val GITHUB_RAW_URL = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/vastu_data.json"
 
     private val client = HttpClient()
     private val storage = LocalStorage()
