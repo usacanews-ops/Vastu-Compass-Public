@@ -7,7 +7,26 @@ data class VastuDataPackage(
     val version: Int,
     val lastUpdated: String,
     val zones: List<VastuZone> = emptyList(),
-    val items: List<VastuItem> = emptyList()
+    val items: List<VastuItem> = emptyList(),
+    val problemCategories: List<ProblemCategory> = emptyList(), // Added
+    val problems: List<ProblemItem> = emptyList()               // Added
+)
+
+@Serializable
+data class ProblemCategory(
+    val id: String,
+    val name: String,
+    val iconKey: String
+)
+
+@Serializable
+data class ProblemItem(
+    val id: String,
+    val categoryId: String,
+    val title: String,
+    val cause: String = "",
+    val remedy: String = "",
+    val solution: String = ""
 )
 
 @Serializable
@@ -25,7 +44,12 @@ data class VastuZone(
     val badColor: String = "",
     val goodMetal: String = "",
     val badMetal: String = "",
-    val shape: String = ""
+    val shape: String = "",
+    val generalGoods: String = "",
+    val generalBads: String = "",
+    val goodBusiness: String = "",
+    val badBusiness: String = "",
+    val strictlyAvoid: String = ""
 )
 
 @Serializable
