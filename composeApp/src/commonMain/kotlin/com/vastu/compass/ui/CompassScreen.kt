@@ -5,14 +5,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -21,8 +20,9 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vastu.compass.BeigeBackground
+import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
-import com.vastu.compass.model.VastuZone
 import com.vastu.compass.sensor.getCompassSensor
 import kotlin.math.PI
 import kotlin.math.cos
@@ -32,155 +32,101 @@ import kotlin.math.sin
 fun CompassScreen() {
     val sensor = remember { getCompassSensor() }
     val rawDegrees by sensor.azimuthDegrees.collectAsState(initial = 0f)
-    val animatedDegrees by animateFloatAsState(
-        targetValue = rawDegrees,
-        animationSpec = tween(durationMillis = 200)
-    )
-
+    val animatedDegrees by animateFloatAsState(targetValue = rawDegrees, animationSpec = tween(200))
     val pkg by VastuRepository.dataFlow.collectAsState()
 
     val currentZone = remember(rawDegrees, pkg) {
-        val zones = pkg?.zones ?: emptyList()
         val norm = (rawDegrees % 360f + 360f) % 360f
-        zones.firstOrNull { z ->
-            if (z.startDeg > z.endDeg) norm >= z.startDeg || norm < z.endDeg
-            else norm >= z.startDeg && norm < z.endDeg
+        pkg?.zones?.firstOrNull { z ->
+            if (z.startDeg > z.endDeg) norm >= z.startDeg || norm < z.endDeg else norm >= z.startDeg && norm < z.endDeg
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF8F9FA))
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("VASTU COMPASS", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B), letterSpacing = 1.sp)
+        Text("VASTU COLOR CHAKRA", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Premium Compass UI
-        Box(modifier = Modifier.size(320.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(340.dp), contentAlignment = Alignment.Center) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val center = Offset(size.width / 2, size.height / 2)
-                val radius = size.minDimension / 2 - 16.dp.toPx()
+                val radius = size.minDimension / 2 - 20.dp.toPx()
 
-                // Dial rotation
                 rotate(-animatedDegrees, pivot = center) {
-                    // Outer Ring
-                    drawCircle(Color(0xFFE2E8F0), radius = radius + 8.dp.toPx(), style = Stroke(width = 4.dp.toPx()))
-                    drawCircle(Color.White, radius = radius)
+                    // 1. Draw Color Chakra Arcs (16 Zones)
+                    val colorMap = listOf(
+                        Color(0xFF2196F3), Color(0xFF64B5F6), Color(0xFFE0E0E0), Color(0xFFAED581),
+                        Color(0xFF4CAF50), Color(0xFF81C784), Color(0xFFF44336), Color(0xFFE57373),
+                        Color(0xFFFF9800), Color(0xFFFFB74D), Color(0xFFFFD54F), Color(0xFFFFF176),
+                        Color(0xFF9E9E9E), Color(0xFFBDBDBD), Color(0xFF4FC3F7), Color(0xFF81D4FA)
+                    )
                     
-                    // Zone Dividers & Markers
                     for (i in 0 until 16) {
-                        val angleDeg = i * 22.5 - 11.25
-                        val angleRad = angleDeg * (PI / 180.0)
-                        val p1 = Offset(
-                            (center.x + (radius - 16.dp.toPx()) * cos(angleRad)).toFloat(),
-                            (center.y + (radius - 16.dp.toPx()) * sin(angleRad)).toFloat()
+                        val startAngle = i * 22.5f - 11.25f - 90f
+                        drawArc(
+                            color = colorMap[i].copy(alpha = 0.3f),
+                            startAngle = startAngle,
+                            sweepAngle = 22.5f,
+                            useCenter = true,
+                            topLeft = Offset(center.x - radius, center.y - radius),
+                            size = Size(radius * 2, radius * 2)
                         )
-                        val p2 = Offset(
-                            (center.x + radius * cos(angleRad)).toFloat(),
-                            (center.y + radius * sin(angleRad)).toFloat()
-                        )
-                        drawLine(Color(0xFFCBD5E1), p1, p2, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
                     }
+
+                    // 2. Draw 32 Padas (Ticks)
+                    drawCircle(Color.White, radius = radius, style = Stroke(width = 2.dp.toPx()))
+                    for (i in 0 until 32) {
+                        val angleRad = (i * 11.25 - 90) * (PI / 180.0)
+                        val isMajor = i % 2 == 0
+                        val tickLength = if (isMajor) 16.dp.toPx() else 8.dp.toPx()
+                        
+                        val p1 = Offset((center.x + (radius - tickLength) * cos(angleRad)).toFloat(), (center.y + (radius - tickLength) * sin(angleRad)).toFloat())
+                        val p2 = Offset((center.x + radius * cos(angleRad)).toFloat(), (center.y + radius * sin(angleRad)).toFloat())
+                        drawLine(Color.DarkGray, p1, p2, strokeWidth = if(isMajor) 2.dp.toPx() else 1.dp.toPx())
+                    }
+
+                    // 3. Draw Wind Flow (VayuOverlay) from NW
+                    val windPath = Path().apply {
+                        moveTo(center.x - radius * 0.7f, center.y - radius * 0.7f) // NW
+                        quadraticBezierTo(center.x, center.y - radius * 0.3f, center.x + radius * 0.6f, center.y + radius * 0.6f)
+                    }
+                    drawPath(windPath, color = Color(0x66B3E5FC), style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
                 }
 
-                // Modern Needle
+                // Fixed Red Needle
                 val needle = Path().apply {
-                    moveTo(center.x, center.y - radius + 12.dp.toPx())
-                    lineTo(center.x - 8.dp.toPx(), center.y)
-                    lineTo(center.x + 8.dp.toPx(), center.y)
+                    moveTo(center.x, center.y - radius + 10.dp.toPx())
+                    lineTo(center.x - 6.dp.toPx(), center.y)
+                    lineTo(center.x + 6.dp.toPx(), center.y)
                     close()
                 }
-                drawPath(needle, color = Color(0xFFEF4444))
-                drawCircle(Color(0xFF1E293B), radius = 8.dp.toPx(), center = center)
-                drawCircle(Color.White, radius = 3.dp.toPx(), center = center)
+                drawPath(needle, color = Color.Red)
+                drawCircle(Color.DarkGray, radius = 6.dp.toPx(), center = center)
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${rawDegrees.toInt()}°", fontSize = 36.sp, fontWeight = FontWeight.Black, color = Color(0xFF0F172A))
-                Text(currentZone?.id ?: "N", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3B82F6))
+                Text("${rawDegrees.toInt()}°", fontSize = 32.sp, fontWeight = FontWeight.Black)
+                Text(currentZone?.id ?: "N", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = VastuGreen)
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Professional Data Card
+        // Info Card
         currentZone?.let { zone ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                elevation = 6.dp,
-                backgroundColor = Color.White
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(zone.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                            Text("Pada: ${zone.pada}", fontSize = 13.sp, color = Color(0xFF64748B))
-                        }
-                        Surface(color = Color(0xFFEFF6FF), shape = RoundedCornerShape(8.dp)) {
-                            Text(zone.element, color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-                        }
-                    }
-
-                    Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFF1F5F9))
-
-                    // Premium Grid for Vastu Properties
-                    VastuPropertyGrid(zone)
-
-                    Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFF1F5F9))
-
-                    Text("Key Attributes", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F172A))
-                    Text(zone.attributes, fontSize = 14.sp, color = Color(0xFF475569), modifier = Modifier.padding(top = 4.dp))
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Text("Effects", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F172A))
-                    Text(zone.effects, fontSize = 14.sp, color = Color(0xFF475569), modifier = Modifier.padding(top = 4.dp))
-
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), elevation = 4.dp) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("${zone.name} (${zone.id})", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Padas: ${zone.pada}", fontSize = 14.sp, color = Color.Gray)
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text("Effects: ${zone.effects}", fontSize = 14.sp)
                     if (zone.remedies.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Surface(color = Color(0xFFFEF2F2), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("Remedies & Treatments", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFB91C1C))
-                                Text(zone.remedies, fontSize = 13.sp, color = Color(0xFF991B1B), modifier = Modifier.padding(top = 4.dp))
-                            }
-                        }
+                        Text("Remedy: ${zone.remedies}", fontSize = 14.sp, color = Color(0xFFD32F2F), modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun VastuPropertyGrid(zone: VastuZone) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            PropertyItem("Good Color", zone.goodColor, Color(0xFF059669))
-            PropertyItem("Bad Color", zone.badColor, Color(0xFFDC2626))
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            PropertyItem("Good Metal", zone.goodMetal, Color(0xFF059669))
-            PropertyItem("Bad Metal", zone.badMetal, Color(0xFFDC2626))
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            PropertyItem("Ideal Shape", zone.shape, Color(0xFF475569))
-        }
-    }
-}
-
-@Composable
-fun PropertyItem(label: String, value: String, valueColor: Color) {
-    Column(modifier = Modifier.fillMaxWidth(0.48f)) {
-        Text(label, fontSize = 11.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.SemiBold)
-        Text(value.ifBlank { "N/A" }, fontSize = 14.sp, color = valueColor, fontWeight = FontWeight.Medium)
     }
 }
