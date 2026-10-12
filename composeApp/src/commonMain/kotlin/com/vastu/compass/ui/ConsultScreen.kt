@@ -148,25 +148,55 @@ fun ConsultScreen(onBack: () -> Unit) {
                         }
                     }
                 } else if (step == 2) {
-                    // PAYMENT GATE
-                    Text("Complete Payment", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Card(modifier = Modifier.fillMaxWidth(), elevation = 4.dp, shape = RoundedCornerShape(12.dp), backgroundColor = Color.White) {
-                        Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Total Amount: ${selectedService?.price}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Saffron)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            // QR Code Placeholder (Until Image loading library is added)
-                            Box(modifier = Modifier.size(150.dp).background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.QrCodeScanner, contentDescription = "QR", modifier = Modifier.size(64.dp), tint = Color(0xFF64748B))
-                                    Text("Scan via any UPI App", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
-                                }
-                            }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("OR PAY USING UPI ID", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+    Text("Complete Payment", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+    Spacer(modifier = Modifier.height(8.dp))
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(), 
+        elevation = 4.dp, 
+        shape = RoundedCornerShape(12.dp), 
+        backgroundColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp), 
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Total Amount: ${selectedService?.price}", 
+                fontSize = 22.sp, 
+                fontWeight = FontWeight.Bold, 
+                color = Saffron
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // --- KAMEL QR CODE IMAGE LOADER GOES HERE ---
+            KamelImage(
+                resource = asyncPainterResource(data.qrCodeUrl),
+                contentDescription = "Payment QR Code",
+                modifier = Modifier
+                    .size(160.dp)
+                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .padding(8.dp),
+                onLoading = { 
+                    Box(modifier = Modifier.size(160.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Saffron) 
+                    }
+                },
+                onFailure = { 
+                    Column(
+                        modifier = Modifier.size(160.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.BrokenImage, contentDescription = "Failed", tint = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Failed to load QR", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("OR PAY USING UPI ID", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                             Spacer(modifier = Modifier.height(8.dp))
                             
                             // Copiable UPI ID
