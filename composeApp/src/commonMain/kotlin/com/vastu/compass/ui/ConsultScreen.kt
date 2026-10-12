@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle // Added missing import
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +20,6 @@ import androidx.compose.ui.unit.sp
 import com.vastu.compass.BeigeBackground
 import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
-import kotlinx.coroutines.delay
 
 @Composable
 fun ConsultScreen(onBack: () -> Unit) {
