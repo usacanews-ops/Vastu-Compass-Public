@@ -27,6 +27,8 @@ kotlin {
                 implementation(compose.material)
                 implementation(compose.materialIconsExtended)
                 implementation("media.kamel:kamel-image:0.9.3")
+          implementation(compose.ui)
+            implementation(compose.components.resources) // Enables Res.drawable.app_logo
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
                 implementation("io.ktor:ktor-client-core:2.3.8")
