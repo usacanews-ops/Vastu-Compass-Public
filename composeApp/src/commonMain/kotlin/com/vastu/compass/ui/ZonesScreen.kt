@@ -10,43 +10,40 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Card
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vastu.compass.BeigeBackground
 import com.vastu.compass.data.VastuRepository
-import org.jetbrains.compose.resources.painterResource
 
-// Import the auto-generated resources from your composeApp
-import vastu_compass.composeapp.generated.resources.*
-
-@Composable
-fun getVectorPainter(iconKey: String): Painter {
+fun getVectorIcon(iconKey: String): ImageVector {
     return when (iconKey) {
-        "water_drop" -> painterResource(Res.drawable.ic_water_drop)
-        "opacity" -> painterResource(Res.drawable.ic_opacity)
-        "delete" -> painterResource(Res.drawable.ic_delete)
-        "directions_car" -> painterResource(Res.drawable.ic_directions_car)
-        "electric_car" -> painterResource(Res.drawable.ic_electric_car)
-        "lock" -> painterResource(Res.drawable.ic_lock)
-        "description" -> painterResource(Res.drawable.ic_description)
-        "gavel" -> painterResource(Res.drawable.ic_gavel)
-        "medication" -> painterResource(Res.drawable.ic_medication)
-        "countertops" -> painterResource(Res.drawable.ic_countertops)
-        "wc" -> painterResource(Res.drawable.ic_wc)
-        "park" -> painterResource(Res.drawable.ic_park)
-        "menu_book" -> painterResource(Res.drawable.ic_menu_book)
-        "face" -> painterResource(Res.drawable.ic_mirror)
-        "brightness_7" -> painterResource(Res.drawable.ic_mandir)
-        else -> painterResource(Res.drawable.ic_description)
+        "water_drop" -> Icons.Default.WaterDrop
+        "opacity" -> Icons.Default.Opacity
+        "delete" -> Icons.Default.Delete
+        "directions_car" -> Icons.Default.DirectionsCar
+        "electric_car" -> Icons.Default.ElectricCar
+        "lock" -> Icons.Default.Lock
+        "description" -> Icons.Default.Description
+        "gavel" -> Icons.Default.Gavel
+        "medication" -> Icons.Default.MedicalServices
+        "countertops" -> Icons.Default.Countertops
+        "wc" -> Icons.Default.Wc
+        "park" -> Icons.Default.Park
+        "menu_book" -> Icons.Default.MenuBook
+        "face" -> Icons.Default.Face
+        "brightness_7" -> Icons.Default.Brightness7
+        else -> Icons.Default.Category
     }
 }
 
@@ -88,9 +85,8 @@ fun ZonesScreen(onItemClick: (String) -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        // Replaced Icons.Default.Info with your vector painter
                         Icon(
-                            painter = getVectorPainter(item.iconKey),
+                            imageVector = getVectorIcon(item.iconKey),
                             contentDescription = item.title,
                             tint = Color(0xFF8D6E63),
                             modifier = Modifier.size(36.dp)
