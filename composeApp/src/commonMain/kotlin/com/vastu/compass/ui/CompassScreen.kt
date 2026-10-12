@@ -5,8 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,19 +18,48 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vastu.compass.BeigeBackground
 import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
+import com.vastu.compass.model.VastuZone
 import com.vastu.compass.sensor.getCompassSensor
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+// Dynamically fetch the correct elemental icon
+fun getElementIcon(element: String, zoneId: String): ImageVector {
+    val lower = element.lowercase()
+    return when {
+        lower.contains("air") || zoneId == "NW" -> Icons.Default.Air // The 3-line Breeze icon
+        lower.contains("water") -> Icons.Default.WaterDrop
+        lower.contains("fire") -> Icons.Default.LocalFireDepartment
+        lower.contains("earth") -> Icons.Default.Terrain
+        lower.contains("space") -> Icons.Default.AllInclusive
+        else -> Icons.Default.Info
+    }
+}
+
+// Dynamically color the icon based on the element
+fun getElementColor(element: String, zoneId: String): Color {
+    val lower = element.lowercase()
+    return when {
+        lower.contains("air") || zoneId == "NW" -> Color(0xFF03A9F4) // Light Blue Wind
+        lower.contains("water") -> Color(0xFF1976D2) // Deep Blue Water
+        lower.contains("fire") -> Color(0xFFD32F2F) // Red Fire
+        lower.contains("earth") -> Color(0xFFF57F17) // Yellow/Brown Earth
+        lower.contains("space") -> Color(0xFF757575) // Grey Space
+        else -> Color(0xFF64748B)
+    }
+}
 
 @Composable
 fun CompassScreen() {
@@ -43,7 +76,7 @@ fun CompassScreen() {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("VASTU COLOR CHAKRA", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
@@ -87,12 +120,18 @@ fun CompassScreen() {
                         drawLine(Color.DarkGray, p1, p2, strokeWidth = if(isMajor) 2.dp.toPx() else 1.dp.toPx())
                     }
 
-                    // 3. Draw Wind Flow (VayuOverlay) from NW
-                    val windPath = Path().apply {
-                        moveTo(center.x - radius * 0.7f, center.y - radius * 0.7f) // NW
-                        quadraticBezierTo(center.x, center.y - radius * 0.3f, center.x + radius * 0.6f, center.y + radius * 0.6f)
+                    // 3. Draw Wind Flow (Vayu) from NW
+                    val dashEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f), 0f)
+                    val windPath1 = Path().apply {
+                        moveTo(center.x - radius * 0.6f, center.y - radius * 0.6f)
+                        quadraticBezierTo(center.x, center.y - radius * 0.2f, center.x + radius * 0.5f, center.y + radius * 0.3f)
                     }
-                    drawPath(windPath, color = Color(0x66B3E5FC), style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
+                    val windPath2 = Path().apply {
+                        moveTo(center.x - radius * 0.8f, center.y - radius * 0.4f)
+                        quadraticBezierTo(center.x - radius * 0.2f, center.y, center.x + radius * 0.3f, center.y + radius * 0.5f)
+                    }
+                    drawPath(windPath1, color = Color(0xFF81D4FA), style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, pathEffect = dashEffect))
+                    drawPath(windPath2, color = Color(0xFF81D4FA), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = dashEffect))
                 }
 
                 // Fixed Red Needle
@@ -114,19 +153,90 @@ fun CompassScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Info Card
+        // Professional Insights Card
         currentZone?.let { zone ->
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), elevation = 4.dp) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("${zone.name} (${zone.id})", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("Padas: ${zone.pada}", fontSize = 14.sp, color = Color.Gray)
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text("Effects: ${zone.effects}", fontSize = 14.sp)
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), elevation = 6.dp, backgroundColor = Color.White) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Element Icon
+                            Icon(
+                                imageVector = getElementIcon(zone.element, zone.id),
+                                contentDescription = zone.element,
+                                tint = getElementColor(zone.element, zone.id),
+                                modifier = Modifier.size(36.dp).padding(end = 12.dp)
+                            )
+                            Column {
+                                Text(zone.name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                Text("Pada: ${zone.pada}", fontSize = 13.sp, color = Color(0xFF64748B))
+                            }
+                        }
+                        Surface(color = Color(0xFFEFF6FF), shape = RoundedCornerShape(8.dp)) {
+                            Text(zone.element, color = Color(0xFF2563EB), fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                        }
+                    }
+
+                    Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFF1F5F9))
+
+                    VastuPropertyGrid(zone)
+
+                    Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFF1F5F9))
+
+                    Text("Key Attributes", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F172A))
+                    Text(zone.attributes, fontSize = 14.sp, color = Color(0xFF475569), modifier = Modifier.padding(top = 4.dp))
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Text("Effects", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F172A))
+                    Text(zone.effects, fontSize = 14.sp, color = Color(0xFF475569), modifier = Modifier.padding(top = 4.dp))
+
                     if (zone.remedies.isNotBlank()) {
-                        Text("Remedy: ${zone.remedies}", fontSize = 14.sp, color = Color(0xFFD32F2F), modifier = Modifier.padding(top = 4.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(color = Color(0xFFFEF2F2), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Remedies & Treatments", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFB91C1C))
+                                Text(zone.remedies, fontSize = 13.sp, color = Color(0xFF991B1B), modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(80.dp)) // Padding for bottom nav & consult button
         }
+    }
+}
+
+@Composable
+fun VastuPropertyGrid(zone: VastuZone) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            PropertyItem("Good Color", zone.goodColor, Color(0xFF059669), Modifier.weight(1f))
+            PropertyItem("Bad Color", zone.badColor, Color(0xFFDC2626), Modifier.weight(1f))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            PropertyItem("Good Metal", zone.goodMetal, Color(0xFF059669), Modifier.weight(1f))
+            PropertyItem("Bad Metal", zone.badMetal, Color(0xFFDC2626), Modifier.weight(1f))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            PropertyItem("Ideal Shape", zone.shape, Color(0xFF475569), Modifier.weight(1f))
+            PropertyItem("Strictly Avoid", zone.strictlyAvoid, Color(0xFFB91C1C), Modifier.weight(1f))
+        }
+        Divider(color = Color(0xFFF8FAFC))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            PropertyItem("Good Business", zone.goodBusiness, Color(0xFF059669), Modifier.weight(1f))
+            PropertyItem("Bad Business", zone.badBusiness, Color(0xFFDC2626), Modifier.weight(1f))
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            PropertyItem("General Goods", zone.generalGoods, Color(0xFF059669), Modifier.weight(1f))
+            PropertyItem("General Bads", zone.generalBads, Color(0xFFDC2626), Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+fun PropertyItem(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(end = 8.dp)) {
+        Text(label, fontSize = 11.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.SemiBold)
+        Text(value.ifBlank { "N/A" }, fontSize = 13.sp, color = valueColor, fontWeight = FontWeight.Medium)
     }
 }
