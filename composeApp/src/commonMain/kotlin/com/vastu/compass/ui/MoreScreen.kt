@@ -5,8 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,6 +15,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vastu.compass.BeigeBackground
+import com.vastu.compass.Saffron
+import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
 import kotlinx.coroutines.launch
 
@@ -24,108 +26,66 @@ fun MoreScreen() {
     val pkg by VastuRepository.dataFlow.collectAsState()
     val scope = rememberCoroutineScope()
     var isSyncing by remember { mutableStateOf(false) }
+    var syncMessage by remember { mutableStateOf("") }
     val uriHandler = LocalUriHandler.current
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF8F9FA))
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("SETTINGS & PROFILE", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B), letterSpacing = 1.sp)
-        Spacer(modifier = Modifier.height(32.dp))
+        Text("SETTINGS & PROFILE", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Sync & Data Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            elevation = 4.dp,
-            backgroundColor = Color.White
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Database Version: ${pkg?.version ?: "Offline"}", 
-                    fontSize = 16.sp, 
-                    fontWeight = FontWeight.SemiBold, 
-                    color = Color(0xFF334155)
-                )
-                Text(
-                    text = "Last Updated: ${pkg?.lastUpdated ?: "N/A"}", 
-                    fontSize = 12.sp, 
-                    color = Color(0xFF94A3B8)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), backgroundColor = Color.White, elevation = 2.dp) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Button(
                     onClick = {
                         scope.launch {
                             isSyncing = true
-                            VastuRepository.syncWithGitHub() // Manually trigger fetch
+                            syncMessage = "Syncing..."
+                            syncMessage = VastuRepository.syncWithGitHub()
                             isSyncing = false
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF3B82F6), contentColor = Color.White),
-                    shape = RoundedCornerShape(8.dp),
-                    enabled = !isSyncing
+                    colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White)
                 ) {
-                    Icon(Icons.Default.Sync, contentDescription = "Sync")
+                    Icon(Icons.Default.Sync, "Sync")
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isSyncing) "Syncing with Server..." else "Sync Data Manually")
+                    Text(if (isSyncing) "Syncing..." else "Sync Database (v${pkg?.version ?: "?"})")
+                }
+                if (syncMessage.isNotEmpty()) {
+                    Text(syncMessage, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = TextAlign.Center, color = if (syncMessage.contains("Failed")) Color.Red else VastuGreen, fontSize = 12.sp)
                 }
             }
         }
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Support Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            elevation = 4.dp,
-            backgroundColor = Color.White
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Need Help or Vastu Consultation?", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF475569))
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = {
-                        try {
-                            // Opens the user's default email app
-                            uriHandler.openUri("mailto:info@itwebsolutions.ca")
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF10B981), contentColor = Color.White),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Email, contentDescription = "Contact")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Contact Us")
-                }
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), backgroundColor = Color.White, elevation = 2.dp) {
+            Column {
+                ListTile("Share App", Icons.Default.Share) { /* Implement Android Share Intent */ }
+                Divider()
+                ListTile("Terms & Conditions", Icons.Default.Description) { uriHandler.openUri("https://yourwebsite.com/terms") }
+                Divider()
+                ListTile("Contact Us", Icons.Default.Email) { uriHandler.openUri("mailto:info@itwebsolutions.ca") }
             }
         }
-
+        
         Spacer(modifier = Modifier.weight(1f))
+        
+        Text("© 2026 IT Web Solutions", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+        Text("Brampton, Canada", fontSize = 12.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
 
-        // Developer Branding
-        Text(
-            text = "Developed by IT Web Solutions, Brampton",
-            fontSize = 14.sp,
-            color = Color(0xFF64748B),
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+@Composable
+fun ListTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = VastuGreen)
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(title, color = Color(0xFF334155), fontSize = 16.sp)
+        }
     }
 }
