@@ -73,7 +73,7 @@ fun ConsultScreen(onBack: () -> Unit) {
         fetchState = FetchState.Loading
         try {
             val client = HttpClient()
-            val configUrl = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/consult_config.json?t=${Random.nextInt(10000, 99999)}"
+           val configUrl = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/consult_config.json?t=${Random.nextInt(10000, 99999)}"
             val response = client.get(configUrl).bodyAsText()
 
             val parsedData = Json {
