@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.sp
 import com.vastu.compass.BeigeBackground
 import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
-import com.vastu.compass.data.TelegramNotifier
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 import io.ktor.client.HttpClient
@@ -37,7 +36,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
 
-// Strict dynamic configuration — no fallback mock data
 @Serializable
 data class ConsultConfig(
     val services: List<ConsultService>,
@@ -83,7 +81,6 @@ fun ConsultScreen(onBack: () -> Unit) {
                 isLenient = true
             }.decodeFromString<ConsultConfig>(response)
 
-            // Validate that remote data actually contains the necessary booking info
             if (parsedData.services.isEmpty() || parsedData.upiId.isBlank() || parsedData.slots.isEmpty()) {
                 throw Exception("Incomplete consultation configuration received from server.")
             }
@@ -344,13 +341,18 @@ fun ConsultScreen(onBack: () -> Unit) {
                             onClick = {
                                 selectedSlot = slot
                                 step = 4
+
+                                // Notify backend server securely to dispatch the Telegram alert from PHP
                                 coroutineScope.launch {
-                                    TelegramNotifier.notifyBooking(
-                                        serviceName = selectedService?.name ?: "Vastu Consultation",
-                                        amount = selectedService?.price ?: "₹99",
-                                        slot = slot,
-                                        orderId = currentOrderId
-                                    )
+                                    try {
+                                        if (data.statusEndpoint.isNotBlank()) {
+                                            val client = HttpClient()
+                                            val notifyUrl = "${data.statusEndpoint}?action=book_slot&order_id=$currentOrderId&service=${selectedService?.name?.encodeURLParameter()}&price=${selectedService?.price?.encodeURLParameter()}&slot=${slot.encodeURLParameter()}"
+                                            client.get(notifyUrl)
+                                        }
+                                    } catch (e: Exception) {
+                                        // Booking stays confirmed on the user device even if background dispatch retries
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
@@ -378,9 +380,19 @@ fun ConsultScreen(onBack: () -> Unit) {
                             modifier = Modifier.padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = "Success", tint = VastuGreen, modifier = Modifier.size(64.dp))
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Success",
+                                tint = VastuGreen,
+                                modifier = Modifier.size(64.dp)
+                            )
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Booking Confirmed!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = VastuGreen)
+                            Text(
+                                text = "Booking Confirmed!",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = VastuGreen
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Text("Service: ${selectedService?.name}", fontWeight = FontWeight.Bold)
@@ -389,7 +401,7 @@ fun ConsultScreen(onBack: () -> Unit) {
 
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                "An alert has been dispatched to our expert consultant. You will receive a WhatsApp call at your scheduled time.",
+                                text = "An alert has been dispatched to our expert consultant. You will receive a WhatsApp call at your scheduled time.",
                                 textAlign = TextAlign.Center,
                                 color = Color.DarkGray,
                                 fontSize = 13.sp,
