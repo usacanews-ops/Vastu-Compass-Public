@@ -34,4 +34,4 @@ jobs:
         with:
           name: Vastu-Compass-Release-APK
           path: composeApp/build/outputs/apk/release/*.apk
-          retention-days: 3
+          retention-days: 30
