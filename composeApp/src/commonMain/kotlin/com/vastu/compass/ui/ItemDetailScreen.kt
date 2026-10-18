@@ -85,7 +85,17 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
 
     val currentZone = remember(currentZoneId, pkg) {
         pkg?.zones?.firstOrNull { it.id.equals(currentZoneId, ignoreCase = true) }
-            ?: VastuZone(id = currentZoneId, name = ZONE_NAMES[currentZoneId] ?: currentZoneId)
+            ?: VastuZone(
+                id = currentZoneId,
+                name = ZONE_NAMES[currentZoneId] ?: currentZoneId,
+                element = "",
+                startDeg = 0f,
+                endDeg = 0f,
+                attributes = "",
+                pada = currentPada,
+                effects = "",
+                remedies = ""
+            )
     }
 
     var manualSelectedZoneId by remember { mutableStateOf<String?>(null) }
