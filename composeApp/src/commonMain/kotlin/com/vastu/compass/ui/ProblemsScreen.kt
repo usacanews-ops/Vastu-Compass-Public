@@ -48,7 +48,7 @@ fun ProblemsScreen() {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search by problem, category, or remedy...", fontSize = 14.sp) },
+            placeholder = { Text("Search problems...", fontSize = 15.sp) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
             modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(8.dp)),
             singleLine = true,
@@ -130,7 +130,7 @@ fun ProblemsScreen() {
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
+                                    .padding(vertical = 6.dp),
                                 backgroundColor = Color(0xFFF8FAFC),
                                 elevation = 0.dp,
                                 shape = RoundedCornerShape(8.dp)
