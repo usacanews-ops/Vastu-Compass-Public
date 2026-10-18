@@ -22,8 +22,10 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          # Pin to 8.5 to fix DefaultArtifactPublicationSet crash with Kotlin 1.9.24
+          gradle-version: '8.5'
 
-      # Using 'gradle' instead of './gradlew' bypasses the missing wrapper file
       - name: Build Release APK
         run: gradle :composeApp:assembleRelease
 
@@ -32,4 +34,4 @@ jobs:
         with:
           name: Vastu-Compass-Release-APK
           path: composeApp/build/outputs/apk/release/*.apk
-          retention-days: 3  # Automatically deletes after 3 days to save your quota
+          retention-days: 3
