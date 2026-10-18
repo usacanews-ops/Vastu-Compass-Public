@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +57,28 @@ private val ZONE_NAMES = mapOf(
     "S" to "South", "SSW" to "South-South-West", "SW" to "South-West", "WSW" to "West-South-West",
     "W" to "West", "WNW" to "West-North-West", "NW" to "North-West", "NNW" to "North-North-West"
 )
+
+// Added missing icon helper directly to this file
+private fun getDetailVectorIcon(iconKey: String): ImageVector {
+    return when (iconKey) {
+        "water_drop" -> Icons.Default.WaterDrop
+        "opacity" -> Icons.Default.Opacity
+        "delete" -> Icons.Default.Delete
+        "directions_car" -> Icons.Default.DirectionsCar
+        "electric_car" -> Icons.Default.ElectricCar
+        "lock" -> Icons.Default.Lock
+        "description" -> Icons.Default.Description
+        "gavel" -> Icons.Default.Gavel
+        "medication" -> Icons.Default.MedicalServices
+        "countertops" -> Icons.Default.Countertops
+        "wc" -> Icons.Default.Wc
+        "park" -> Icons.Default.Park
+        "menu_book" -> Icons.Default.MenuBook
+        "face" -> Icons.Default.Face
+        "brightness_7" -> Icons.Default.Brightness7
+        else -> Icons.Default.Category
+    }
+}
 
 fun calculatePada(degrees: Float): String {
     val norm = (degrees % 360f + 360f) % 360f
@@ -128,7 +151,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
             Spacer(modifier = Modifier.width(12.dp))
             item?.let {
                 Icon(
-                    imageVector = getVectorIcon(it.iconKey),
+                    imageVector = getDetailVectorIcon(it.iconKey), // Uses the internal helper now
                     contentDescription = it.title,
                     tint = VastuGreen,
                     modifier = Modifier.size(28.dp)
