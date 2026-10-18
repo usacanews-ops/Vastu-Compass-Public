@@ -83,19 +83,9 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
     val currentPada = remember(rawDegrees) { calculatePada(rawDegrees) }
     val currentZoneId = remember(rawDegrees) { calculateZoneId(rawDegrees) }
 
-   val currentZone = remember(currentZoneId, pkg) {
+    val currentZone = remember(currentZoneId, pkg) {
         pkg?.zones?.firstOrNull { it.id.equals(currentZoneId, ignoreCase = true) }
-            ?: VastuZone(
-                id = currentZoneId,
-                name = ZONE_NAMES[currentZoneId] ?: currentZoneId,
-                element = "",
-                startDeg = 0f,
-                endDeg = 0f,
-                attributes = "",
-                pada = currentPada,
-                effects = "",
-                remedies = ""
-            )
+            ?: VastuZone(id = currentZoneId, name = ZONE_NAMES[currentZoneId] ?: currentZoneId)
     }
 
     var manualSelectedZoneId by remember { mutableStateOf<String?>(null) }
@@ -110,34 +100,72 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Top Bar
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(38.dp).background(Color.White, CircleShape)) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color(0xFF3E2723))
             }
             Spacer(modifier = Modifier.width(12.dp))
             item?.let {
-                Text(text = it.title.uppercase(), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
+                Text(text = it.title.uppercase(), fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
             }
         }
 
         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 72.dp)) {
-            // Compass Block (Omitted to save space, keep your existing compass canvas block here exactly as before)
+            // COMPASS CARD
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), backgroundColor = Color.White, elevation = 4.dp) {
                     Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("LIVE FACING DIRECTION", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B), letterSpacing = 1.sp)
                         Text("${ZONE_NAMES[currentZoneId] ?: currentZoneId} (${currentZoneId} · ${currentPada})", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = VastuGreen)
                         Text("${rawDegrees.toInt()}° Heading", fontSize = 12.sp, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         
-                        // Keep your existing Interactive Canvas Compass block right here
                         Box(modifier = Modifier.size(240.dp), contentAlignment = Alignment.Center) {
-                            // ... existing rotating dial ...
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val center = Offset(size.width / 2, size.height / 2)
+                                val radius = size.minDimension / 2 - 16.dp.toPx()
+
+                                rotate(-animatedDegrees, pivot = center) {
+                                    val colorMap = listOf(
+                                        Color(0xFF2196F3), Color(0xFF64B5F6), Color(0xFFE0E0E0), Color(0xFFAED581),
+                                        Color(0xFF4CAF50), Color(0xFF81C784), Color(0xFFF44336), Color(0xFFE57373),
+                                        Color(0xFFFF9800), Color(0xFFFFB74D), Color(0xFFFFD54F), Color(0xFFFFF176),
+                                        Color(0xFF9E9E9E), Color(0xFFBDBDBD), Color(0xFF4FC3F7), Color(0xFF81D4FA)
+                                    )
+                                    for (i in 0 until 16) {
+                                        drawArc(
+                                            color = colorMap[i].copy(alpha = 0.3f),
+                                            startAngle = i * 22.5f - 11.25f - 90f, sweepAngle = 22.5f,
+                                            useCenter = true, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2, radius * 2)
+                                        )
+                                    }
+                                    drawCircle(color = Color(0xFFD4AF37), radius = radius, style = Stroke(width = 3.dp.toPx()))
+                                    for (i in 0 until 32) {
+                                        val angleRad = (i * 11.25 - 90) * (PI / 180.0)
+                                        val isMajor = i % 2 == 0
+                                        val length = if (isMajor) 14.dp.toPx() else 7.dp.toPx()
+                                        drawLine(
+                                            color = if (isMajor) Color(0xFF1E293B) else Color.Gray,
+                                            start = Offset((center.x + (radius - length) * cos(angleRad)).toFloat(), (center.y + (radius - length) * sin(angleRad)).toFloat()),
+                                            end = Offset((center.x + radius * cos(angleRad)).toFloat(), (center.y + radius * sin(angleRad)).toFloat()),
+                                            strokeWidth = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
+                                        )
+                                    }
+                                }
+
+                                val needle = Path().apply {
+                                    moveTo(center.x, center.y - radius + 2.dp.toPx())
+                                    lineTo(center.x - 8.dp.toPx(), center.y - radius + 26.dp.toPx())
+                                    lineTo(center.x + 8.dp.toPx(), center.y - radius + 26.dp.toPx())
+                                    close()
+                                }
+                                drawPath(needle, color = Color(0xFFDC2626))
+                                drawCircle(Color(0xFF1E293B), radius = 6.dp.toPx(), center = center)
+                            }
                             Surface(shape = CircleShape, color = Color.White, elevation = 3.dp, modifier = Modifier.size(76.dp)) {
                                 Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Text(currentZoneId, fontSize = 18.sp, fontWeight = FontWeight.Black, color = VastuGreen)
-                                    Text(currentPada, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Saffron)
+                                    Text(currentZoneId, fontSize = 20.sp, fontWeight = FontWeight.Black, color = VastuGreen)
+                                    Text(currentPada, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Saffron)
                                 }
                             }
                         }
@@ -145,13 +173,13 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 }
             }
 
-            // Highlighting the fix for "Best" Color Status
+            // EFFECT STATUS BADGE & INFO
             item {
                 val statusText = activeEffect?.status ?: "Neutral"
                 val (badgeBg, badgeTextColor, statusIcon) = when {
-                    statusText.contains("Best", ignoreCase = true) || statusText.contains("Good", ignoreCase = true) || statusText.contains("Favorable", ignoreCase = true) ->
+                    statusText.equals("Best", ignoreCase = true) || statusText.equals("Good", ignoreCase = true) || statusText.equals("Favorable", ignoreCase = true) ->
                         Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), Icons.Default.CheckCircle)
-                    statusText.contains("Bad", ignoreCase = true) || statusText.contains("Avoid", ignoreCase = true) || statusText.contains("Strictly", ignoreCase = true) ->
+                    statusText.equals("Bad", ignoreCase = true) || statusText.equals("Avoid", ignoreCase = true) || statusText.equals("Strictly Avoid", ignoreCase = true) ->
                         Triple(Color(0xFFFFEBEE), Color(0xFFC62828), Icons.Default.Cancel)
                     else ->
                         Triple(Color(0xFFFFF3E0), Color(0xFFEF6C00), Icons.Default.Info)
@@ -168,17 +196,17 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                                 Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(statusIcon, contentDescription = null, tint = badgeTextColor, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(statusText.uppercase(), color = badgeTextColor, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                    Text(statusText.uppercase(), color = badgeTextColor, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
                                 }
                             }
                         }
                         
                         Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF1F5F9))
-                        Text("Vastu Effects in this Zone", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+                        Text("Vastu Effects in this Zone", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(activeEffect?.note?.ifBlank { null } ?: activeZone.effects.ifBlank { "No severe negative effects recorded for this zone." }, fontSize = 14.sp, color = Color(0xFF475569), lineHeight = 20.sp)
+                        Text(activeEffect?.note?.ifBlank { null } ?: activeZone.effects.ifBlank { "No specific effects recorded for this item in this zone." }, fontSize = 15.sp, color = Color(0xFF475569), lineHeight = 22.sp)
                         
-                        val remedy = activeEffect?.remedy?.ifBlank { null } ?: activeZone.remedies.ifBlank { null }
+                        val remedy = activeEffect?.remedy?.ifBlank { null }
                         if (remedy != null) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Surface(color = Color(0xFFFEF2F2), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -186,10 +214,10 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Build, contentDescription = null, tint = Color(0xFFB91C1C), modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Recommended Vastu Remedy", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFB91C1C))
+                                        Text("Recommended Vastu Remedy", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFB91C1C))
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(remedy, fontSize = 13.sp, color = Color(0xFF991B1B), lineHeight = 18.sp)
+                                    Text(remedy, fontSize = 14.sp, color = Color(0xFF991B1B), lineHeight = 20.sp)
                                 }
                             }
                         }
@@ -197,7 +225,54 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 }
             }
 
-            // Quick Zone Browser Fix for "Best"
+            // RESTORED: RICH ACTIVE ZONE PROPERTIES
+            item {
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), backgroundColor = Color.White, elevation = 2.dp) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("${activeZone.name} Zone Properties", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B), modifier = Modifier.padding(bottom = 12.dp))
+                        
+                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Element", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                Text(activeZone.element, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0F172A))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Ideal Shape", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                Text(activeZone.shape.ifBlank { "N/A" }, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0F172A))
+                            }
+                        }
+                        Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(vertical = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Good Colors", fontSize = 12.sp, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
+                                Text(activeZone.goodColor, fontSize = 15.sp, color = Color(0xFF0F172A))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Bad Colors", fontSize = 12.sp, color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
+                                Text(activeZone.badColor, fontSize = 15.sp, color = Color(0xFF0F172A))
+                            }
+                        }
+                        Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(vertical = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Good Metals", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                Text(activeZone.goodMetal, fontSize = 15.sp, color = Color(0xFF0F172A))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Bad Metals", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                Text(activeZone.badMetal, fontSize = 15.sp, color = Color(0xFF0F172A))
+                            }
+                        }
+                        Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Strictly Avoid", fontSize = 12.sp, color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
+                        Text(activeZone.strictlyAvoid.ifBlank { "N/A" }, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp))
+                        
+                        Text("Key Attributes", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text(activeZone.attributes, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp))
+                    }
+                }
+            }
+
             item { Text("ALL 16 ZONES COMPATIBILITY", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF3E2723), modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)) }
             
             items(ZONE_ORDER) { zoneKey ->
@@ -207,8 +282,8 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 val status = effect?.status ?: "Neutral"
 
                 val (pillBg, pillTextColor) = when {
-                    status.contains("Best", ignoreCase = true) || status.contains("Good", ignoreCase = true) || status.contains("Favorable", ignoreCase = true) -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
-                    status.contains("Bad", ignoreCase = true) || status.contains("Avoid", ignoreCase = true) -> Color(0xFFFFEBEE) to Color(0xFFC62828)
+                    status.equals("Best", ignoreCase = true) || status.equals("Good", ignoreCase = true) || status.equals("Favorable", ignoreCase = true) -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
+                    status.equals("Bad", ignoreCase = true) || status.equals("Avoid", ignoreCase = true) || status.equals("Strictly Avoid", ignoreCase = true) -> Color(0xFFFFEBEE) to Color(0xFFC62828)
                     else -> Color(0xFFFFF3E0) to Color(0xFFEF6C00)
                 }
 
@@ -216,14 +291,14 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 Card(modifier = Modifier.fillMaxWidth().border(if (isSelected || isFacing) 2.dp else 0.dp, borderColor, RoundedCornerShape(12.dp)).clickable { manualSelectedZoneId = zoneKey }, shape = RoundedCornerShape(12.dp), backgroundColor = Color.White, elevation = if (isSelected) 3.dp else 1.dp) {
                     Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(zoneKey, fontWeight = FontWeight.Black, fontSize = 15.sp, color = if (isFacing) Saffron else Color(0xFF1E293B), modifier = Modifier.width(46.dp))
+                            Text(zoneKey, fontWeight = FontWeight.Black, fontSize = 16.sp, color = if (isFacing) Saffron else Color(0xFF1E293B), modifier = Modifier.width(46.dp))
                             Column {
-                                Text(ZONE_NAMES[zoneKey] ?: zoneKey, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
-                                if (isFacing) Text("FACING NOW (${currentPada})", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Saffron)
+                                Text(ZONE_NAMES[zoneKey] ?: zoneKey, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF334155))
+                                if (isFacing) Text("FACING NOW (${currentPada})", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Saffron)
                             }
                         }
                         Surface(color = pillBg, shape = RoundedCornerShape(6.dp)) {
-                            Text(status, color = pillTextColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                            Text(status, color = pillTextColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                         }
                     }
                 }
