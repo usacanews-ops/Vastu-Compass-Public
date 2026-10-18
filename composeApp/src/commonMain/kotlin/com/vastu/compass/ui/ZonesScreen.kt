@@ -52,14 +52,12 @@ fun ZonesScreen(onItemClick: (String) -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Weight(1f) ensures the title/pada takes available space without squeezing the Element Pill
                             Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                                 Text("${zone.name} (${zone.id})", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text("Padas: ${zone.pada}", fontSize = 14.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
                             }
                             
-                            // Element Pill - wrapContentWidth prevents letter-by-letter squeezing
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = VastuGreen.copy(alpha = 0.1f),
@@ -80,15 +78,36 @@ fun ZonesScreen(onItemClick: (String) -> Unit) {
                             Column(modifier = Modifier.padding(top = 12.dp)) {
                                 Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(bottom = 12.dp))
 
-                                // Increased Text Sizes to 15.sp for readability
-                                Text("Good Colors:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF2E7D32))
-                                Text(zone.goodColor, fontSize = 15.sp, color = Color(0xFF334155), modifier = Modifier.padding(bottom = 8.dp))
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Ideal Shape:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.Gray)
+                                        Text(zone.shape.ifBlank { "N/A" }, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp))
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Good Metals:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.Gray)
+                                        Text(zone.goodMetal, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp))
+                                    }
+                                }
 
-                                Text("Avoid Colors:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFFC62828))
-                                Text(zone.badColor, fontSize = 15.sp, color = Color(0xFF334155), modifier = Modifier.padding(bottom = 8.dp))
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Good Colors:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF2E7D32))
+                                        Text(zone.goodColor, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp))
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Avoid Colors:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFC62828))
+                                        Text(zone.badColor, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp))
+                                    }
+                                }
 
-                                Text("Key Attributes:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF1E293B))
-                                Text(zone.attributes, fontSize = 15.sp, color = Color(0xFF475569), modifier = Modifier.padding(bottom = 8.dp), lineHeight = 20.sp)
+                                Text("Key Attributes:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.Gray)
+                                Text(zone.attributes, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp), lineHeight = 22.sp)
+
+                                Text("Strictly Avoid:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFC62828))
+                                Text(zone.strictlyAvoid.ifBlank { "N/A" }, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp), lineHeight = 22.sp)
+
+                                Text("Good For Business:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF2E7D32))
+                                Text(zone.goodBusiness.ifBlank { "N/A" }, fontSize = 15.sp, color = Color(0xFF0F172A), modifier = Modifier.padding(bottom = 8.dp), lineHeight = 22.sp)
 
                                 Surface(
                                     color = Color(0xFFFFF8E1),
@@ -96,7 +115,7 @@ fun ZonesScreen(onItemClick: (String) -> Unit) {
                                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Remedies", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = Color(0xFFF57F17))
+                                        Text("Remedies", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color(0xFFF57F17))
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(zone.remedies, fontSize = 15.sp, color = Color(0xFF3E2723), lineHeight = 22.sp)
                                     }
