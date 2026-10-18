@@ -23,16 +23,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
+      # Using 'gradle' instead of './gradlew' bypasses the missing wrapper file
       - name: Build Release APK
-        run: ./gradlew :composeApp:assembleRelease
+        run: gradle :composeApp:assembleRelease
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Vastu-Compass-Release-APK
           path: composeApp/build/outputs/apk/release/*.apk
-          # This is the critical line that fixes your storage quota issue:
-          retention-days: 3
+          retention-days: 3  # Automatically deletes after 3 days to save your quota
