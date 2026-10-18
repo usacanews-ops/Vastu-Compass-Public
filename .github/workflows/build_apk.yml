@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    # Required permission for GitHub Actions to create a Release
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -23,15 +27,19 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          # Pin to 8.5 to fix DefaultArtifactPublicationSet crash with Kotlin 1.9.24
+          # Pinned to 8.5 to fix the DefaultArtifactPublicationSet crash
           gradle-version: '8.5'
 
       - name: Build Release APK
+        # Using global 'gradle' bypasses the missing ./gradlew file error
         run: gradle :composeApp:assembleRelease
 
-      - name: Upload Release Artifact
-        uses: actions/upload-artifact@v4
+      - name: Bypass Quota - Upload as GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: Vastu-Compass-Release-APK
-          path: composeApp/build/outputs/apk/release/*.apk
-          retention-days: 30
+          tag_name: release-build-${{ github.run_number }}
+          name: App Release Build ${{ github.run_number }}
+          files: composeApp/build/outputs/apk/release/*.apk
+          prerelease: true
