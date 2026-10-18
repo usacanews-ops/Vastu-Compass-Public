@@ -102,10 +102,9 @@ fun CompassScreen() {
                         drawCircle(Color(0xFF1E293B), radius = 6.dp.toPx(), center = center)
                     }
 
-                    // Inner Box - Now shows BOTH Zone ID and PADA
                     Surface(shape = CircleShape, color = Color.White, elevation = 4.dp, modifier = Modifier.size(90.dp)) {
                         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Text(currentZoneId, fontSize = 24.sp, fontWeight = FontWeight.Black, color = VastuGreen)
+                            Text(currentZoneId, fontSize = 26.sp, fontWeight = FontWeight.Black, color = VastuGreen)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(currentPada, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Saffron)
                         }
