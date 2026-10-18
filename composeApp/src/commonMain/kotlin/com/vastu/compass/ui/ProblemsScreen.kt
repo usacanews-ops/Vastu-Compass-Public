@@ -1,160 +1,139 @@
 package com.vastu.compass.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vastu.compass.BeigeBackground
+import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
-import com.vastu.compass.model.ProblemCategory
 
 @Composable
 fun ProblemsScreen() {
     val pkg by VastuRepository.dataFlow.collectAsState()
-    var selectedCategory by remember { mutableStateOf<ProblemCategory?>(null) }
+    val categories = pkg?.problemCategories ?: emptyList()
+    var searchQuery by remember { mutableStateOf("") }
 
-    if (selectedCategory == null) {
-        // MAIN CATEGORIES VIEW
-        val categories = pkg?.problemCategories ?: emptyList()
-        Column(modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp)) {
-            Text("PROBLEM CATEGORIES", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF3E2723))
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(categories.size) { index ->
-                    val cat = categories[index]
-                    Card(
-                        modifier = Modifier.fillMaxWidth().clickable { selectedCategory = cat },
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = 2.dp,
-                        backgroundColor = Color.White
-                    ) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD32F2F))
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(cat.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ChevronRight, contentDescription = "Open", tint = Color.Gray)
-                        }
-                    }
-                }
+    // Live Search Filter Logic
+    val filteredProblems = remember(searchQuery, pkg) {
+        val allProblems = pkg?.problems ?: emptyList()
+        if (searchQuery.isBlank()) {
+            allProblems
+        } else {
+            allProblems.filter { problem ->
+                val catName = categories.find { it.id == problem.categoryId }?.name.orEmpty()
+                problem.title.contains(searchQuery, ignoreCase = true) ||
+                problem.cause.contains(searchQuery, ignoreCase = true) ||
+                problem.solution.contains(searchQuery, ignoreCase = true) ||
+                problem.remedy.contains(searchQuery, ignoreCase = true) ||
+                catName.contains(searchQuery, ignoreCase = true)
             }
         }
-    } else {
-        // DETAIL VIEW (Matches "1000386520.jpg")
-        val allProblems = pkg?.problems ?: emptyList()
-        val categoryProblems = allProblems.filter { it.categoryId == selectedCategory?.id }
-        var searchQuery by remember { mutableStateOf("") }
-        var expandedProblemId by remember { mutableStateOf<String?>(null) }
+    }
 
-        // Pastel color rotation matching your screenshot
-        val pastelColors = listOf(
-            Color(0xFFFFF0F5), // Light Pink
-            Color(0xFFE8F5E9), // Light Green
-            Color(0xFFFFF3E0), // Light Orange/Peach
-            Color(0xFFE3F2FD), // Light Blue
-            Color(0xFFFFF8E1), // Light Yellow
-            Color(0xFFF3E5F5)  // Light Purple
+    Column(
+        modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp)
+    ) {
+        Text("VASTU PROBLEMS", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Professional Search Bar
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search problems, zones, or remedies...", color = Color.Gray) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = VastuGreen) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray)
+                    }
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            shape = RoundedCornerShape(12.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                backgroundColor = Color.White,
+                focusedBorderColor = VastuGreen,
+                unfocusedBorderColor = Color.LightGray
+            )
         )
 
-        Column(modifier = Modifier.fillMaxSize().background(BeigeBackground).padding(16.dp)) {
-            // Header
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                IconButton(
-                    onClick = { selectedCategory = null },
-                    modifier = Modifier.background(Color.White, RoundedCornerShape(50)).size(40.dp)
-                ) {
-                    Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color(0xFF3E2723))
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(selectedCategory!!.name.uppercase(), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3E2723), modifier = Modifier.weight(1f))
-                Icon(Icons.Default.CompassCalibration, contentDescription = "Compass Logo", tint = Color(0xFFD4AF37), modifier = Modifier.size(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (filteredProblems.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No problems match your search.", color = Color.Gray, fontSize = 16.sp)
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(filteredProblems) { problem ->
+                    val catName = categories.find { it.id == problem.categoryId }?.name ?: "GENERAL"
 
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(24.dp)),
-                placeholder = { Text("Search problems...", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = Color(0xFFD4AF37)
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Expandable List
-            val filteredList = categoryProblems.filter { it.title.contains(searchQuery, ignoreCase = true) }
-            
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(filteredList) { index, item ->
-                    val isExpanded = expandedProblemId == item.id
-                    val bgColor = pastelColors[index % pastelColors.size]
-                    val rotationState by animateFloatAsState(targetValue = if (isExpanded) 180f else 0f)
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(bgColor)
-                            .clickable { expandedProblemId = if (isExpanded) null else item.id }
-                            .padding(16.dp)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        backgroundColor = Color.White,
+                        elevation = 2.dp
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            // Category Tag
                             Text(
-                                text = item.title,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.weight(1f)
+                                text = catName.uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = VastuGreen,
+                                letterSpacing = 1.sp
                             )
-                            Icon(
-                                imageVector = Icons.Default.ExpandMore,
-                                contentDescription = "Expand",
-                                tint = Color.DarkGray,
-                                modifier = Modifier.rotate(rotationState)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            // Problem Title (No red icon, larger text)
+                            Text(
+                                text = problem.title,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF0F172A),
+                                lineHeight = 24.sp
                             )
-                        }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                        // Expandable Content: Causes & Remedies
-                        AnimatedVisibility(visible = isExpanded) {
-                            Column(modifier = Modifier.padding(top = 12.dp).fillMaxWidth()) {
-                                Divider(color = Color.Black.copy(alpha = 0.05f), modifier = Modifier.padding(bottom = 12.dp))
-                                
-                                if (item.cause.isNotBlank()) {
-                                    Text("Root Cause:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
-                                    Text(item.cause, fontSize = 13.sp, color = Color(0xFF334155), modifier = Modifier.padding(bottom = 8.dp))
-                                }
-                                if (item.remedy.isNotBlank()) {
-                                    Text("Remedy / Treatment:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
-                                    Text(item.remedy, fontSize = 13.sp, color = Color(0xFF334155), modifier = Modifier.padding(bottom = 8.dp))
-                                }
-                                if (item.solution.isNotBlank()) {
-                                    Text("Ideal Solution:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
-                                    Text(item.solution, fontSize = 13.sp, color = Color(0xFF334155))
+                            // Cause
+                            Text("Root Cause:", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                            Text(problem.cause, fontSize = 15.sp, color = Color(0xFF334155), lineHeight = 22.sp)
+                            
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Remedy / Solution Block
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFF1F8F5), // Very soft green background
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text("Vastu Solution:", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = VastuGreen)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(problem.remedy, fontSize = 15.sp, color = Color(0xFF1B4D3E), lineHeight = 22.sp, modifier = Modifier.padding(bottom = 6.dp))
+                                    Text(problem.solution, fontSize = 15.sp, color = Color(0xFF1B4D3E), lineHeight = 22.sp)
                                 }
                             }
                         }
