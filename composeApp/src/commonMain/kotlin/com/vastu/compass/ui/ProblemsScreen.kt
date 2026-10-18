@@ -28,7 +28,6 @@ fun ProblemsScreen() {
     val categories = pkg?.problemCategories ?: emptyList()
     var searchQuery by remember { mutableStateOf("") }
 
-    // Live Search Filter Logic
     val filteredProblems = remember(searchQuery, pkg) {
         val allProblems = pkg?.problems ?: emptyList()
         if (searchQuery.isBlank()) {
@@ -51,7 +50,6 @@ fun ProblemsScreen() {
         Text("VASTU PROBLEMS", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Professional Search Bar
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
@@ -96,44 +94,40 @@ fun ProblemsScreen() {
                         elevation = 2.dp
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
-                            // Category Tag
                             Text(
                                 text = catName.uppercase(),
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = VastuGreen,
                                 letterSpacing = 1.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             
-                            // Problem Title (No red icon, larger text)
                             Text(
                                 text = problem.title,
-                                fontSize = 18.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color(0xFF0F172A),
-                                lineHeight = 24.sp
+                                lineHeight = 26.sp
                             )
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Cause
-                            Text("Root Cause:", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
-                            Text(problem.cause, fontSize = 15.sp, color = Color(0xFF334155), lineHeight = 22.sp)
                             
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Remedy / Solution Block
+                            Text("Root Cause:", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                            Text(problem.cause, fontSize = 16.sp, color = Color(0xFF334155), lineHeight = 24.sp)
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFF1F8F5), // Very soft green background
+                                color = Color(0xFFF1F8F5),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Text("Vastu Solution:", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = VastuGreen)
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Vastu Solution:", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = VastuGreen)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(problem.remedy, fontSize = 15.sp, color = Color(0xFF1B4D3E), lineHeight = 22.sp, modifier = Modifier.padding(bottom = 6.dp))
-                                    Text(problem.solution, fontSize = 15.sp, color = Color(0xFF1B4D3E), lineHeight = 22.sp)
+                                    Text(problem.remedy, fontSize = 16.sp, color = Color(0xFF1B4D3E), lineHeight = 24.sp, modifier = Modifier.padding(bottom = 6.dp))
+                                    Text(problem.solution, fontSize = 16.sp, color = Color(0xFF1B4D3E), lineHeight = 24.sp)
                                 }
                             }
                         }
