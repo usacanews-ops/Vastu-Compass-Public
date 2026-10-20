@@ -1,0 +1,38 @@
+name: Generate Missing Drawable Icons
+
+on:
+  workflow_dispatch: # This allows you to run it manually from the Actions tab
+
+jobs:
+  generate-and-commit:
+    runs-on: ubuntu-latest
+    
+    # Grants the action permission to commit and push code back to your repo
+    permissions:
+      contents: write 
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Run script to generate XML icons
+        run: python generate_icons.py
+
+      - name: Commit and push generated icons
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add the newly created drawable folder and its contents
+          git add composeApp/src/commonMain/composeResources/drawable/
+          
+          # Commit the changes (or skip if they already exist)
+          git commit -m "Auto-generate missing Vastu zone vector icons" || echo "No changes to commit"
+          
+          # Push back to the main branch
+          git push
