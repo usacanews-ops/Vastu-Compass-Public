@@ -19,6 +19,7 @@ kotlin {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material)
+            implementation(compose.materialIconsExtended) // Fixes all unresolved icon references
             implementation(compose.ui)
             implementation(compose.components.resources)
 
