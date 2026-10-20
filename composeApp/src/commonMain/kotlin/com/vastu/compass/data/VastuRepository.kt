@@ -1,6 +1,7 @@
 package com.vastu.compass.data
 
 import com.vastu.compass.model.VastuDataPackage
+import com.vastu.compass.model.VastuItem
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
 
@@ -31,18 +33,19 @@ object VastuRepository {
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     suspend fun initialize() {
-        // 1. Instantly load from local storage cache if available
         try {
             val cachedJson = storage.loadData("vastu_db")
             if (!cachedJson.isNullOrBlank()) {
                 val cachedData = jsonFormat.decodeFromString<VastuDataPackage>(cachedJson)
                 _dataFlow.value = cachedData
+                CoroutineScope(Dispatchers.Default).launch {
+                    preloadIcons(cachedData.items)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        // 2. Automatically sync in background on launch (critical for first-time launch)
         CoroutineScope(Dispatchers.Default).launch {
             syncWithLiveServer()
         }
@@ -58,10 +61,12 @@ object VastuRepository {
             val remoteData = jsonFormat.decodeFromString<VastuDataPackage>(response)
             val currentData = _dataFlow.value
 
-            // Update if no local data exists OR server version is newer
             if (currentData == null || remoteData.version >= currentData.version) {
                 _dataFlow.value = remoteData
                 storage.saveData("vastu_db", response)
+                CoroutineScope(Dispatchers.Default).launch {
+                    preloadIcons(remoteData.items)
+                }
                 _isSyncing.value = false
                 "Success! Updated to version ${remoteData.version}"
             } else {
@@ -72,6 +77,18 @@ object VastuRepository {
             e.printStackTrace()
             _isSyncing.value = false
             "Sync Failed: ${e.message ?: "Network error"}"
+        }
+    }
+
+    private suspend fun preloadIcons(items: List<VastuItem>) {
+        withContext(Dispatchers.Default) {
+            items.forEach { item ->
+                if (item.iconUrl.isNotBlank()) {
+                    try {
+                        client.get(item.iconUrl)
+                    } catch (_: Exception) {}
+                }
+            }
         }
     }
 }
