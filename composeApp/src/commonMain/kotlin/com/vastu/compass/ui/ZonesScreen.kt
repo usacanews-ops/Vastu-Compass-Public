@@ -26,26 +26,36 @@ import androidx.compose.ui.unit.sp
 import com.vastu.compass.data.VastuRepository
 
 fun getZonesVectorIcon(iconKey: String): ImageVector {
-    return when (iconKey) {
-        "water_drop" -> Icons.Default.WaterDrop
+    return when (iconKey.lowercase()) {
+        "water_drop", "water" -> Icons.Default.WaterDrop
         "opacity" -> Icons.Default.Opacity
-        "delete" -> Icons.Default.Delete
-        "directions_car" -> Icons.Default.DirectionsCar
+        "delete", "dustbin", "trash" -> Icons.Default.Delete
+        "directions_car", "parking", "car" -> Icons.Default.DirectionsCar
         "electric_car" -> Icons.Default.ElectricCar
-        "lock" -> Icons.Default.Lock
-        "description" -> Icons.Default.Description
-        "gavel" -> Icons.Default.Gavel
-        "medication" -> Icons.Default.MedicalServices
-        "countertops" -> Icons.Default.Countertops
-        "wc" -> Icons.Default.Wc
-        "park" -> Icons.Default.Park
-        "menu_book" -> Icons.Default.MenuBook
-        "face" -> Icons.Default.Face
-        "brightness_7" -> Icons.Default.Brightness7
+        "lock", "safe", "locker" -> Icons.Default.Lock
+        "description", "document", "study" -> Icons.Default.Description
+        "gavel", "legal", "court" -> Icons.Default.Gavel
+        "medication", "medical", "health" -> Icons.Default.MedicalServices
+        "countertops", "kitchen", "stove" -> Icons.Default.Countertops
+        "wc", "toilet", "bathroom", "restroom" -> Icons.Default.Wc
+        "park", "garden", "plants" -> Icons.Default.Park
+        "menu_book", "books", "education" -> Icons.Default.MenuBook
+        "face", "mirror" -> Icons.Default.Face
+        "brightness_7", "mandir", "temple", "pooja" -> Icons.Default.Brightness7
+        "bed", "bedroom", "master_bedroom", "king_bed" -> Icons.Default.Bed
+        "shower", "bathtub", "bath" -> Icons.Default.Bathtub
+        "weekend", "sofa", "living_room", "lounge" -> Icons.Default.Weekend
+        "restaurant", "dining", "food" -> Icons.Default.Restaurant
+        "storefront", "shop", "business" -> Icons.Default.Storefront
+        "payments", "money", "finance" -> Icons.Default.Payments
+        "favorite", "love", "marriage" -> Icons.Default.Favorite
+        "work", "career", "job" -> Icons.Default.Work
+        "diversity_1", "family", "harmony" -> Icons.Default.Diversity1
+        "self_improvement", "peace", "meditation" -> Icons.Default.SelfImprovement
+        "child_care", "baby", "children" -> Icons.Default.ChildCare
         else -> Icons.Default.Category
     }
 }
-
 @Composable
 fun ZonesScreen(onItemClick: (String) -> Unit) {
     val pkg by VastuRepository.dataFlow.collectAsState()
