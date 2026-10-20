@@ -52,15 +52,17 @@ android {
         versionName = "1.0.0"
     }
 
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            // This signs the release APK so Android allows installation:
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
 
