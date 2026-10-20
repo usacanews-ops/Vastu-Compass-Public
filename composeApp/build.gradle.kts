@@ -1,9 +1,8 @@
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
-    alias(libs.plugins.jetbrainsCompose)
-    alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.kotlinxSerialization)
+    kotlin("multiplatform")
+    id("com.android.application")
+    id("org.jetbrains.compose")
+    kotlin("plugin.serialization")
 }
 
 kotlin {
@@ -23,25 +22,26 @@ kotlin {
             implementation(compose.ui)
             implementation(compose.components.resources)
 
-            // Serialization & Networking
-            implementation(libs.kotlinx.serialization.json)
-            implementation(libs.ktor.client.core)
-            implementation(libs.ktor.client.content.negotiation)
-            implementation(libs.ktor.serialization.kotlinx.json)
+            // Serialization & Ktor
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+            implementation("io.ktor:ktor-client-core:2.3.9")
+            implementation("io.ktor:ktor-client-content-negotiation:2.3.9")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.9")
 
-            // Image Loading
-            implementation(libs.kamel.image)
+            // Kamel Image Loader
+            implementation("media.kamel:kamel-image:0.9.4")
         }
 
         androidMain.dependencies {
-            implementation(libs.androidx.activity.compose)
-            implementation(libs.ktor.client.okhttp)
+            implementation("androidx.activity:activity-compose:1.8.2")
+            implementation("io.ktor:ktor-client-okhttp:2.3.9")
         }
     }
 }
 
 android {
     namespace = "com.iws.vastucompass"
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.iws.vastucompass"
