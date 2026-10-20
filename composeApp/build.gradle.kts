@@ -42,7 +42,6 @@ kotlin {
 
 android {
     namespace = "com.iws.vastucompass"
-    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.iws.vastucompass"
