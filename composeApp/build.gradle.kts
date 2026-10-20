@@ -1,81 +1,66 @@
 plugins {
-    id("org.jetbrains.kotlin.multiplatform")
-    id("com.android.application")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.serialization")
+    alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.jetbrainsCompose)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlinxSerialization)
 }
 
 kotlin {
-    androidTarget()
-
-    listOf(
-        iosX64(),
-        iosArm64(),
-        iosSimulatorArm64()
-    ).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = "ComposeApp"
-            isStatic = true
+    androidTarget {
+        compilations.all {
+            kotlinOptions {
+                jvmTarget = "17"
+            }
         }
     }
 
     sourceSets {
-        val commonMain = maybeCreate("commonMain").apply {
-            dependencies {
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material)
-                implementation(compose.materialIconsExtended)
-                implementation("media.kamel:kamel-image:0.9.3")
-          implementation(compose.ui)
-            implementation(compose.components.resources) // Enables Res.drawable.app_logo
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-                implementation("io.ktor:ktor-client-core:2.3.8")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
-            }
+        commonMain.dependencies {
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material)
+            implementation(compose.ui)
+            implementation(compose.components.resources)
+
+            // Serialization & Networking
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+
+            // Image Loading
+            implementation(libs.kamel.image)
         }
-        
-        maybeCreate("androidMain").apply {
-            dependencies {
-                implementation("androidx.activity:activity-compose:1.8.2")
-                implementation("androidx.appcompat:appcompat:1.6.1")
-                implementation("io.ktor:ktor-client-okhttp:2.3.8")
-            }
+
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.ktor.client.okhttp)
         }
-        
-        // Safely find or create iosMain and apply dependencies
-        val iosMain = maybeCreate("iosMain").apply {
-            dependsOn(commonMain)
-            dependencies {
-                implementation("io.ktor:ktor-client-darwin:2.3.8")
-            }
-        }
-        
-        // Manually link the specific iOS architectures to the shared iosMain
-        maybeCreate("iosX64Main").dependsOn(iosMain)
-        maybeCreate("iosArm64Main").dependsOn(iosMain)
-        maybeCreate("iosSimulatorArm64Main").dependsOn(iosMain)
     }
 }
 
 android {
-    namespace = "com.vastu.compass"
+    namespace = "com.iws.vastucompass"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.vastu.compass"
+        applicationId = "com.iws.vastucompass"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.1"
+        versionName = "1.0.0"
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
