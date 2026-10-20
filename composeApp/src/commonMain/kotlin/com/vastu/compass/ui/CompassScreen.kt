@@ -6,7 +6,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
@@ -64,7 +63,7 @@ fun CompassScreen() {
             if (z.startDeg > z.endDeg) norm >= z.startDeg || norm < z.endDeg else norm >= z.startDeg && norm < z.endDeg
         }
     }
-    
+
     val currentPada = remember(rawDegrees) { getPadaForDegrees(rawDegrees) }
 
     Column(
@@ -90,7 +89,7 @@ fun CompassScreen() {
                         Color(0xFFFF9800), Color(0xFFFFB74D), Color(0xFFFFD54F), Color(0xFFFFF176),
                         Color(0xFF9E9E9E), Color(0xFFBDBDBD), Color(0xFF4FC3F7), Color(0xFF81D4FA)
                     )
-                    
+
                     for (i in 0 until 16) {
                         val startAngle = i * 22.5f - 11.25f - 90f
                         drawArc(
@@ -108,13 +107,13 @@ fun CompassScreen() {
                         val angleRad = (i * 11.25 - 90) * (PI / 180.0)
                         val isMajor = i % 2 == 0
                         val tickLength = if (isMajor) 14.dp.toPx() else 7.dp.toPx()
-                        
+
                         val p1 = Offset((center.x + (radius - tickLength) * cos(angleRad)).toFloat(), (center.y + (radius - tickLength) * sin(angleRad)).toFloat())
                         val p2 = Offset((center.x + radius * cos(angleRad)).toFloat(), (center.y + radius * sin(angleRad)).toFloat())
-                        drawLine(Color(0xFF334155), p1, p2, strokeWidth = if(isMajor) 2.dp.toPx() else 1.dp.toPx())
+                        drawLine(Color(0xFF334155), p1, p2, strokeWidth = if (isMajor) 2.dp.toPx() else 1.dp.toPx())
                     }
                 }
-                
+
                 drawCircle(Color(0xFFF3EEEA), radius = radius * 0.42f, center = center)
 
                 val needle = Path().apply {
@@ -138,8 +137,8 @@ fun CompassScreen() {
 
         currentZone?.let { zone ->
             Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), 
-                shape = RoundedCornerShape(20.dp), 
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                shape = RoundedCornerShape(20.dp),
                 backgroundColor = Color.White,
                 elevation = 2.dp
             ) {
@@ -168,7 +167,7 @@ fun CompassScreen() {
                                 Text("Padas: ${zone.pada}", fontSize = 14.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
                             }
                         }
-                        
+
                         Surface(
                             color = Color(0xFFF1F5F9),
                             shape = RoundedCornerShape(12.dp),
@@ -185,12 +184,12 @@ fun CompassScreen() {
                     }
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFF1F5F9), thickness = 1.dp)
-                    
+
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.weight(1f)) {
                             GridItem("Good Color", zone.goodColor, isGood = true)
                             GridItem("Good Metal", zone.goodMetal, isGood = true)
-                            GridItem("Ideal Shape", zone.shape, isNeutral = true) 
+                            GridItem("Ideal Shape", zone.shape, isNeutral = true)
                             GridItem("Good Business", zone.goodBusiness, isGood = true)
                             GridItem("General Goods", zone.generalGoods, isGood = true)
                         }
@@ -212,7 +211,7 @@ fun CompassScreen() {
                     Text(zone.attributes.ifBlank { "N/A" }, fontSize = 15.sp, color = Color(0xFF334155), lineHeight = 22.sp)
 
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text("Effects", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF475569))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(zone.effects.ifBlank { "N/A" }, fontSize = 15.sp, color = Color(0xFF334155), lineHeight = 22.sp)
