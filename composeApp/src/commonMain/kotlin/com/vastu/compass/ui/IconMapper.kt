@@ -8,39 +8,86 @@ object IconMapper {
     fun get(key: String): ImageVector {
         val cleanKey = key.trim().lowercase()
         return when {
-            cleanKey.contains("water") || cleanKey.contains("borewell") || cleanKey.contains("tubewell") -> Icons.Default.WaterDrop
-            cleanKey.contains("filter") || cleanKey.contains("ro") || cleanKey.contains("drink") -> Icons.Default.LocalDrink
-            cleanKey.contains("wc") || cleanKey.contains("toilet") || cleanKey.contains("bath") -> Icons.Default.Wc
-            cleanKey.contains("bed") || cleanKey.contains("guest") || cleanKey.contains("room") -> Icons.Default.Home
-            cleanKey.contains("gate") || cleanKey.contains("entrance") || cleanKey.contains("door") -> Icons.Default.MeetingRoom
-            cleanKey.contains("stair") -> Icons.Default.Menu
-            cleanKey.contains("balcony") || cleanKey.contains("terrace") -> Icons.Default.Home
-            cleanKey.contains("tv") || cleanKey.contains("laptop") || cleanKey.contains("computer") -> Icons.Default.Devices
-            cleanKey.contains("oven") || cleanKey.contains("microwave") || cleanKey.contains("fridge") -> Icons.Default.Kitchen
-            cleanKey.contains("invertor") || cleanKey.contains("generator") || cleanKey.contains("power") -> Icons.Default.Power
-            cleanKey.contains("heat") || cleanKey.contains("fire") -> Icons.Default.Whatshot
-            cleanKey.contains("ac") || cleanKey.contains("conditioner") -> Icons.Default.Air
-            cleanKey.contains("desk") || cleanKey.contains("study") || cleanKey.contains("bookshelf") || cleanKey.contains("book") -> Icons.Default.MenuBook
-            cleanKey.contains("clock") || cleanKey.contains("time") -> Icons.Default.Schedule
-            cleanKey.contains("shoe") || cleanKey.contains("iron") || cleanKey.contains("sew") -> Icons.Default.Layers
-            cleanKey.contains("broom") || cleanKey.contains("mop") || cleanKey.contains("clean") -> Icons.Default.CleaningServices
-            cleanKey.contains("mirror") || cleanKey.contains("face") -> Icons.Default.Face
-            cleanKey.contains("ancestor") || cleanKey.contains("family") || cleanKey.contains("photo") -> Icons.Default.Image
-            cleanKey.contains("medic") || cleanKey.contains("first aid") || cleanKey.contains("health") -> Icons.Default.MedicalServices
-            cleanKey.contains("invest") || cleanKey.contains("share") || cleanKey.contains("file") -> Icons.Default.TrendingUp
-            cleanKey.contains("storage") || cleanKey.contains("store") || cleanKey.contains("box") -> Icons.Default.AllInbox
-            cleanKey.contains("plant") || cleanKey.contains("indoor") || cleanKey.contains("park") -> Icons.Default.Park
-            cleanKey.contains("pet") || cleanKey.contains("cage") -> Icons.Default.Pets
-            cleanKey.contains("pool") || cleanKey.contains("swim") -> Icons.Default.Pool
-            cleanKey.contains("car") || cleanKey.contains("parking") -> Icons.Default.DirectionsCar
-            cleanKey.contains("mandir") || cleanKey.contains("temple") || cleanKey.contains("pooja") -> Icons.Default.Brightness7
-            cleanKey.contains("delete") || cleanKey.contains("dustbin") || cleanKey.contains("trash") -> Icons.Default.Delete
-            cleanKey.contains("lock") || cleanKey.contains("safe") -> Icons.Default.Lock
-            cleanKey.contains("kitchen") || cleanKey.contains("stove") || cleanKey.contains("counter") -> Icons.Default.Countertops
-            cleanKey.contains("money") || cleanKey.contains("finance") -> Icons.Default.Payments
-            cleanKey.contains("love") || cleanKey.contains("marriage") -> Icons.Default.Favorite
-            cleanKey.contains("career") || cleanKey.contains("job") || cleanKey.contains("work") -> Icons.Default.Work
-            cleanKey.contains("child") || cleanKey.contains("baby") -> Icons.Default.ChildCare
+            // Living & Rooms
+            cleanKey == "bed" || cleanKey.contains("master") -> Icons.Default.Bed
+            cleanKey == "child_care" || cleanKey.contains("children") -> Icons.Default.ChildCare
+            cleanKey == "hotel" || cleanKey.contains("guest") -> Icons.Default.Hotel
+            cleanKey == "weekend" || cleanKey.contains("living") || cleanKey.contains("drawing") -> Icons.Default.Weekend
+            cleanKey == "restaurant" || cleanKey.contains("dining") -> Icons.Default.Restaurant
+
+            // Architecture & Layout
+            cleanKey == "door_front" || cleanKey.contains("entrance") || cleanKey.contains("gate") -> Icons.Default.MeetingRoom
+            cleanKey == "stairs" || cleanKey.contains("staircase") -> Icons.Default.Stairs
+            cleanKey == "balcony" || cleanKey.contains("terrace") -> Icons.Default.Deck
+            cleanKey == "inventory_2" || cleanKey.contains("heavy_storage") || cleanKey.contains("storeroom") -> Icons.Default.Inventory2
+            cleanKey == "shelves" || cleanKey.contains("light_storage") -> Icons.Default.AllInbox
+
+            // Sanitation & Drainage
+            cleanKey == "wc" || cleanKey.contains("toilet") -> Icons.Default.Wc
+            cleanKey == "shower" || cleanKey.contains("bathing") || cleanKey.contains("bathroom") -> Icons.Default.Shower
+            cleanKey == "local_laundry_service" || cleanKey.contains("washing") -> Icons.Default.LocalLaundryService
+            cleanKey == "delete" || cleanKey.contains("dustbin") || cleanKey.contains("trash") || cleanKey.contains("septic") -> Icons.Default.Delete
+            cleanKey == "cleaning_services" || cleanKey.contains("broom") || cleanKey.contains("mop") -> Icons.Default.CleaningServices
+
+            // Wealth & Assets
+            cleanKey == "lock" || cleanKey.contains("safe") || cleanKey.contains("locker") -> Icons.Default.Lock
+            cleanKey == "point_of_sale" || cleanKey.contains("cash") || cleanKey.contains("counter") -> Icons.Default.PointOfSale
+
+            // Important Documents
+            cleanKey == "description" || cleanKey.contains("property") || cleanKey.contains("papers") -> Icons.Default.Description
+            cleanKey == "gavel" || cleanKey.contains("court") || cleanKey.contains("legal") -> Icons.Default.Gavel
+            cleanKey == "trending_up" || cleanKey.contains("invest") || cleanKey.contains("share") -> Icons.Default.TrendingUp
+
+            // Vehicles & Transport
+            cleanKey == "directions_car" || cleanKey.contains("car") || cleanKey.contains("parking") -> Icons.Default.DirectionsCar
+            cleanKey == "electric_car" || cleanKey.contains("ev") || cleanKey.contains("charging") -> Icons.Default.ElectricCar
+
+            // Kitchen & Fire
+            cleanKey == "countertops" || cleanKey.contains("kitchen") || cleanKey.contains("stove") -> Icons.Default.Countertops
+            cleanKey == "microwave" || cleanKey.contains("oven") -> Icons.Default.Kitchen
+            cleanKey == "battery_charging_full" || cleanKey.contains("inverter") || cleanKey.contains("generator") -> Icons.Default.BatteryChargingFull
+
+            // Water & Utilities
+            cleanKey == "water_drop" || cleanKey.contains("overhead") || cleanKey.contains("filter") -> Icons.Default.WaterDrop
+            cleanKey == "opacity" || cleanKey.contains("underground") -> Icons.Default.Opacity
+            cleanKey == "water" || cleanKey.contains("borewell") || cleanKey.contains("tubewell") -> Icons.Default.Water
+
+            // Health & Healing
+            cleanKey == "medication" || cleanKey.contains("medicine") -> Icons.Default.Medication
+            cleanKey == "healing" || cleanKey.contains("first_aid") -> Icons.Default.Healing
+
+            // Landscape & Open Spaces
+            cleanKey == "park" || cleanKey.contains("lawn") || cleanKey.contains("yard") -> Icons.Default.Park
+            cleanKey == "local_florist" || cleanKey.contains("plant") -> Icons.Default.LocalFlorist
+            cleanKey == "pool" || cleanKey.contains("swim") -> Icons.Default.Pool
+
+            // Education & Wisdom
+            cleanKey == "menu_book" || cleanKey.contains("library") || cleanKey.contains("study") -> Icons.Default.MenuBook
+            cleanKey == "desk" || cleanKey.contains("study_desk") -> Icons.Default.Desk
+            cleanKey == "library_books" || cleanKey.contains("bookshelf") -> Icons.Default.LibraryBooks
+
+            // Personal & Grooming
+            cleanKey == "face" || cleanKey.contains("mirror") || cleanKey.contains("dressing") -> Icons.Default.Face
+
+            // Spiritual & Temple
+            cleanKey == "brightness_7" || cleanKey.contains("mandir") || cleanKey.contains("temple") -> Icons.Default.Brightness7
+            cleanKey == "self_improvement" || cleanKey.contains("meditation") || cleanKey.contains("mat") -> Icons.Default.SelfImprovement
+
+            // Electronics & Appliances
+            cleanKey == "tv" || cleanKey.contains("television") -> Icons.Default.Tv
+            cleanKey == "computer" || cleanKey.contains("laptop") -> Icons.Default.Computer
+            cleanKey == "fireplace" || cleanKey.contains("heater") -> Icons.Default.Fireplace
+            cleanKey == "ac_unit" || cleanKey.contains("ac") || cleanKey.contains("conditioner") -> Icons.Default.AcUnit
+            cleanKey == "architecture" || cleanKey.contains("sewing") -> Icons.Default.Architecture
+            cleanKey == "iron" || cleanKey.contains("ironing") -> Icons.Default.Iron
+
+            // Decor & Furniture
+            cleanKey == "schedule" || cleanKey.contains("clock") || cleanKey.contains("time") -> Icons.Default.Schedule
+            cleanKey == "photo" || cleanKey.contains("family") -> Icons.Default.Photo
+            cleanKey == "portrait" || cleanKey.contains("ancestor") -> Icons.Default.Portrait
+            cleanKey == "ice_skating" || cleanKey.contains("shoe") -> Icons.Default.IceSkating
+            cleanKey == "pets" || cleanKey.contains("pet") || cleanKey.contains("cage") -> Icons.Default.Pets
+
             else -> Icons.Default.Category
         }
     }
