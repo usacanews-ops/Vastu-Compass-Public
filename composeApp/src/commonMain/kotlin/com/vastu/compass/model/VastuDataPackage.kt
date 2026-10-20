@@ -38,6 +38,7 @@ data class VastuZone(
 data class VastuItem(
     val id: String,
     val title: String,
+    val category: String = "",
     val iconKey: String = "",
     val iconUrl: String = "",
     val zoneEffects: Map<String, ZoneEffect> = emptyMap()
@@ -45,8 +46,10 @@ data class VastuItem(
 
 @Serializable
 data class ZoneEffect(
-    val status: String,
-    val note: String,
+    val id: String = "",
+    val zoneId: String = "",
+    val status: String = "Neutral",
+    val note: String = "",
     val remedy: String? = null
 )
 
