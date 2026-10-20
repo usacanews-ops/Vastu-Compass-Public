@@ -1,11 +1,7 @@
 name: Build Android App
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-
+  workflow_dispatch: # This adds the "Run workflow" button in GitHub Actions
 jobs:
   build:
     runs-on: ubuntu-latest
