@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +56,7 @@ import com.google.maps.android.compose.*
 import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
-import com.vastu.compass.model.VastuZone
+import com.vastu.compass.model.VastuPada
 import com.vastu.compass.sensor.getCompassSensor
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -67,7 +68,7 @@ import kotlin.math.*
 const val METERS_TO_FEET = 3.28084
 const val FEET_TO_METERS = 0.3048
 const val SQ_METERS_TO_SQ_FEET = 10.7639
-const val EARTH_RADIUS_METERS = 6378137.0 // WGS84 exact equatorial radius
+const val EARTH_RADIUS_METERS = 6378137.0
 
 enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit: String) {
     FEET("Feet", "ft", "sq. ft."),
@@ -75,9 +76,6 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
     CENTIMETERS("Centimeters", "cm", "sq. cm"),
     INCHES("Inches", "in", "sq. in");
 
-    /**
-     * Converts a hierarchical input "x.y" (e.g. 12.6 feet = 12 ft 6 in) into pure meters.
-     */
     fun parseHierarchicalToMeters(input: String): Double? {
         val trimmed = input.trim()
         if (trimmed.isBlank()) return null
@@ -86,33 +84,16 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
         val sub = if (parts.size > 1 && parts[1].isNotBlank()) parts[1].toDoubleOrNull() ?: 0.0 else 0.0
 
         return when (this) {
-            FEET -> {
-                // x is feet, y is inches (1 ft = 12 in)
-                val totalFeet = primary + (sub / 12.0)
-                totalFeet * FEET_TO_METERS
-            }
-            METERS -> {
-                // x is meters, y is centimeters (1 m = 100 cm)
-                val totalMeters = primary + (sub / 100.0)
-                totalMeters
-            }
-            CENTIMETERS -> {
-                // x is cm, y is mm (1 cm = 10 mm)
-                val totalCm = primary + (sub / 10.0)
-                totalCm / 100.0
-            }
+            FEET -> (primary + (sub / 12.0)) * FEET_TO_METERS
+            METERS -> primary + (sub / 100.0)
+            CENTIMETERS -> (primary + (sub / 10.0)) / 100.0
             INCHES -> {
-                // x is inches, y is fractional 1/8ths or 1/10ths of an inch
                 val divisor = if (parts.size > 1 && parts[1].length == 1) 8.0 else 10.0.pow(parts.getOrElse(1) { "" }.length.toDouble())
-                val totalInches = primary + (sub / divisor)
-                totalInches * 0.0254
+                (primary + (sub / divisor)) * 0.0254
             }
         }
     }
 
-    /**
-     * Formats pure meters into the display string respecting x.y hierarchical units.
-     */
     fun formatFromMeters(meters: Double): String {
         return when (this) {
             FEET -> {
@@ -122,15 +103,13 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
                 "$feet.$inches"
             }
             METERS -> {
-                val totalCm = meters * 100.0
                 val m = floor(meters).toInt()
-                val cm = round(totalCm % 100.0).toInt()
+                val cm = round((meters * 100.0) % 100.0).toInt()
                 "$m.$cm"
             }
             CENTIMETERS -> {
-                val totalMm = meters * 1000.0
                 val cm = floor(meters * 100.0).toInt()
-                val mm = round(totalMm % 10.0).toInt()
+                val mm = round((meters * 1000.0) % 10.0).toInt()
                 "$cm.$mm"
             }
             INCHES -> {
@@ -142,9 +121,6 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
         }
     }
 
-    /**
-     * Converts square meters into the corresponding area unit.
-     */
     fun formatAreaFromSqMeters(sqMeters: Double): String {
         val converted = when (this) {
             FEET -> sqMeters * SQ_METERS_TO_SQ_FEET
@@ -253,7 +229,6 @@ fun calculateCentroidAndArea(points: List<LatLng>): Pair<LatLng, Double> {
 
 fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, isSelected: Boolean): BitmapDescriptor {
     val alphaInt = if (isCalculated) 179 else 255
-
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = if (isSelected) android.graphics.Color.WHITE else android.graphics.Color.BLACK
         textSize = 40f
@@ -422,26 +397,65 @@ fun loadPlotFromStorage(context: Context): SavedPlotState? {
     }
 }
 
-data class PadaDefinition(val zoneCode: String, val padaName: String, val startAngle: Float)
+fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqFt: Double) {
+    if (points.isEmpty()) return
 
-private val PADA_32_DEFINITIONS = listOf(
-    PadaDefinition("NNW", "N1", 348.75f), PadaDefinition("N", "N2", 360.0f),
-    PadaDefinition("N", "N3", 11.25f), PadaDefinition("N", "N4", 22.5f),
-    PadaDefinition("NNE", "N5", 33.75f), PadaDefinition("NNE", "N6", 45.0f),
-    PadaDefinition("NE", "N7", 56.25f), PadaDefinition("NE", "N8", 67.5f),
-    PadaDefinition("ENE", "E1", 78.75f), PadaDefinition("ENE", "E2", 90.0f),
-    PadaDefinition("E", "E3", 101.25f), PadaDefinition("E", "E4", 112.5f),
-    PadaDefinition("ESE", "E5", 123.75f), PadaDefinition("ESE", "E6", 135.0f),
-    PadaDefinition("SE", "E7", 146.25f), PadaDefinition("SE", "E8", 157.5f),
-    PadaDefinition("SSE", "S1", 168.75f), PadaDefinition("SSE", "S2", 180.0f),
-    PadaDefinition("S", "S3", 191.25f), PadaDefinition("S", "S4", 202.5f),
-    PadaDefinition("SSW", "S5", 213.75f), PadaDefinition("SSW", "S6", 225.0f),
-    PadaDefinition("SW", "S7", 236.25f), PadaDefinition("SW", "S8", 247.5f),
-    PadaDefinition("WSW", "W1", 258.75f), PadaDefinition("WSW", "W2", 270.0f),
-    PadaDefinition("W", "W3", 281.25f), PadaDefinition("W", "W4", 292.5f),
-    PadaDefinition("WNW", "W5", 303.75f), PadaDefinition("WNW", "W6", 315.0f),
-    PadaDefinition("NW", "W7", 326.25f), PadaDefinition("NW", "W8", 337.5f)
-)
+    val kmlCoordinates = StringBuilder()
+    points.forEach { pt ->
+        kmlCoordinates.append("${formatDec(pt.longitude, 9)},${formatDec(pt.latitude, 9)},0\n")
+    }
+    kmlCoordinates.append("${formatDec(points[0].longitude, 9)},${formatDec(points[0].latitude, 9)},0\n")
+
+    val centroidPlacemark = if (centroid != null) {
+        """
+            <Placemark>
+              <name>Brahmasthan (Centroid)</name>
+              <Point>
+                <coordinates>${formatDec(centroid.longitude, 9)},${formatDec(centroid.latitude, 9)},0</coordinates>
+              </Point>
+            </Placemark>
+        """.trimIndent()
+    } else ""
+
+    val kmlContent = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Vastu Property Layout</name>
+            <description>Total Area: ${formatDec(areaSqFt, 2)} sq ft</description>
+            <Placemark>
+              <name>Property Boundary</name>
+              <Polygon>
+                <outerBoundaryIs>
+                  <LinearRing>
+                    <coordinates>
+                      $kmlCoordinates
+                    </coordinates>
+                  </LinearRing>
+                </outerBoundaryIs>
+              </Polygon>
+            </Placemark>
+            $centroidPlacemark
+          </Document>
+        </kml>
+    """.trimIndent()
+
+    try {
+        val file = File(context.cacheDir, "vastu_property_${System.currentTimeMillis()}.kml")
+        file.writeText(kmlContent)
+
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.google-earth.kml+xml"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Vastu Property Boundary & Centroid Data")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Export KML"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
 
 fun getVastuColorForPada(padaId: String): Color {
     return when {
@@ -496,7 +510,7 @@ actual fun MapScreen() {
     var distanceInputText by remember { mutableStateOf("") }
     var editingEdgeIndex by remember { mutableStateOf<Int?>(null) }
 
-    var selectedVastuZone by remember { mutableStateOf<VastuZone?>(null) }
+    var selectedVastuPada by remember { mutableStateOf<VastuPada?>(null) }
 
     var hasFineLocationPermission by remember {
         mutableStateOf(
@@ -553,10 +567,7 @@ actual fun MapScreen() {
     LaunchedEffect(Unit) {
         if (!hasFineLocationPermission) {
             permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
         } else {
             promptEnableHighAccuracyLocation()
@@ -583,10 +594,7 @@ actual fun MapScreen() {
         }
 
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-
-        onDispose {
-            fusedLocationClient.removeLocationUpdates(locationCallback)
-        }
+        onDispose { fusedLocationClient.removeLocationUpdates(locationCallback) }
     }
 
     var hasCenteredFirstTime by remember { mutableStateOf(initialSavedPlot != null) }
@@ -650,16 +658,11 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Draggable Corner Markers
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
-
                 LaunchedEffect(point) {
-                    if (markerState.position != point) {
-                        markerState.position = point
-                    }
+                    if (markerState.position != point) markerState.position = point
                 }
-
                 LaunchedEffect(markerState) {
                     snapshotFlow { markerState.position }.collect { livePos ->
                         if (index < corners.size && corners[index] != livePos) {
@@ -673,7 +676,6 @@ actual fun MapScreen() {
                         }
                     }
                 }
-
                 Marker(
                     state = markerState,
                     title = "Corner ${getPointLabel(index)}",
@@ -682,7 +684,6 @@ actual fun MapScreen() {
                 )
             }
 
-            // 2. Connecting Lines & Unit-Aware Distance Badges
             if (corners.size >= 2 && !isVastuChakraMode) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
@@ -734,7 +735,6 @@ actual fun MapScreen() {
                 }
             }
 
-            // 3. Property Polygon
             if (corners.size >= 3) {
                 Polygon(
                     points = corners.toList(),
@@ -744,7 +744,6 @@ actual fun MapScreen() {
                 )
             }
 
-            // 4. Centroid Marker
             centroid?.let { centerPoint ->
                 if (!isVastuChakraMode) {
                     val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
@@ -757,14 +756,13 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra: 32 Sectors & Dynamic Alignment Lines
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
+                val padasList = vastuPkg?.padas ?: emptyList()
 
-                PADA_32_DEFINITIONS.forEach { def ->
-                    val adjustedStart = (def.startAngle + vastuRotationOffset + 360f) % 360f
+                padasList.forEach { pada ->
+                    val adjustedStart = (pada.startDeg + vastuRotationOffset + 360f) % 360f
                     val sweepAngle = 11.25f
-                    val endAngle = (adjustedStart + sweepAngle) % 360f
                     val midAngle = (adjustedStart + (sweepAngle / 2f)) % 360f
 
                     val wedgePoints = mutableListOf<LatLng>().apply {
@@ -776,7 +774,7 @@ actual fun MapScreen() {
                         add(center)
                     }
 
-                    val zoneColor = getVastuColorForPada(def.padaName)
+                    val zoneColor = getVastuColorForPada(pada.id)
 
                     Polygon(
                         points = wedgePoints,
@@ -785,35 +783,23 @@ actual fun MapScreen() {
                         strokeWidth = 1.5f,
                         clickable = true,
                         onClick = {
-                            selectedVastuZone = vastuPkg?.zones?.firstOrNull { it.id.equals(def.zoneCode, ignoreCase = true) }
-                                ?: VastuZone(
-                                    id = def.zoneCode,
-                                    name = def.zoneCode,
-                                    element = "Vastu",
-                                    startDeg = adjustedStart,
-                                    endDeg = endAngle,
-                                    attributes = "Vastu Chakra sector ${def.zoneCode} (${def.padaName})",
-                                    pada = def.padaName,
-                                    effects = "Harmonizes energy across ${def.zoneCode} zone.",
-                                    remedies = "Maintain cleanliness and appropriate color balance."
-                                )
+                            selectedVastuPada = pada
                         }
                     )
 
                     val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.13, midAngle.toDouble())
                     Marker(
                         state = rememberMarkerState(
-                            key = "lbl_${def.zoneCode}_${def.padaName}_${formatDec(adjustedStart.toDouble(), 2)}",
+                            key = "lbl_${pada.zoneId}_${pada.id}_${formatDec(adjustedStart.toDouble(), 2)}",
                             position = labelPos
                         ),
-                        icon = createChakraLabelBadge(context, def.zoneCode, def.padaName),
+                        icon = createChakraLabelBadge(context, pada.zoneId, pada.id),
                         anchor = Offset(0.5f, 0.5f),
                         flat = true,
                         zIndex = 4f
                     )
                 }
 
-                // LINE 1: RED SLIM LINE (Magnetic Compass North)
                 val cameraHeading = cameraPositionState.position.bearing
                 val trueCompassBearing = (360.0 - deviceAzimuth + cameraHeading + 360.0) % 360.0
                 val compassNorthRadius = chakraRadiusMeters * 1.20
@@ -826,7 +812,6 @@ actual fun MapScreen() {
                     zIndex = 6f
                 )
 
-                // LINE 2: BLUE SLIM LINE (Google Maps True North + Calibration Offset)
                 val vastuNorthAngle = (0.0 + vastuRotationOffset + 360.0) % 360.0
                 val vastuNorthRadius = chakraRadiusMeters * 0.90
                 val vastuNorthEnd = pointAtDistanceAndBearing(center, vastuNorthRadius, vastuNorthAngle)
@@ -861,7 +846,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Sub-Inch Precision Crosshair
         if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -877,7 +861,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Top-Left Bar: 70% Width with Unit Selector Dropdown
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.70f)
@@ -902,7 +885,6 @@ actual fun MapScreen() {
                                 color = Color(0xFF1E293B)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            // Unit Selector Badge
                             Box {
                                 Surface(
                                     color = Color(0xFFF1F5F9),
@@ -1049,7 +1031,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Vastu Chakra Rotation Calibration Card
         if (isVastuChakraMode && centroid != null) {
             Card(
                 modifier = Modifier
@@ -1089,7 +1070,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Box 1: Hierarchical Length Input (x.y)
         if (corners.isNotEmpty() && centroid == null) {
             val isEditing = editingEdgeIndex != null
             val nextIndex = corners.size
@@ -1202,7 +1182,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Floating Control Dock (Placed right above the bottom 3 buttons row)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -1210,7 +1189,6 @@ actual fun MapScreen() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.End
         ) {
-            // "Align to Google Map North" Button
             FloatingActionButton(
                 onClick = {
                     coroutineScope.launch {
@@ -1302,7 +1280,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Bottom Action Controls (Shifted down to bottom = 24.dp)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1383,7 +1360,6 @@ actual fun MapScreen() {
             }
         }
 
-        // Live Guidance Overlay
         if (isGuidingMode) {
             val dotColor by animateColorAsState(if (isAtCenter) Color(0xFF16A34A) else Color(0xFFDC2626))
 
@@ -1473,15 +1449,21 @@ actual fun MapScreen() {
             }
         }
 
-        // Rich Vastu Zone Details Modal Dialog
-        if (selectedVastuZone != null) {
-            val zone = selectedVastuZone!!
+        if (selectedVastuPada != null) {
+            val pada = selectedVastuPada!!
+            val zone = vastuPkg?.zones?.firstOrNull { it.id.equals(pada.zoneId, ignoreCase = true) }
+
             AlertDialog(
-                onDismissRequest = { selectedVastuZone = null },
+                onDismissRequest = { selectedVastuPada = null },
                 title = {
                     Column {
-                        Text(text = "${zone.name} (${zone.id})", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color(0xFF1E293B))
-                        if (zone.sanskritName.isNotBlank()) {
+                        Text(
+                            text = "${zone?.name ?: pada.zoneId} (${pada.zoneId} · ${pada.id})", 
+                            fontWeight = FontWeight.Black, 
+                            fontSize = 18.sp, 
+                            color = Color(0xFF1E293B)
+                        )
+                        if (zone?.sanskritName?.isNotBlank() == true) {
                             Text(text = "Sanskrit: ${zone.sanskritName}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Saffron)
                         }
                     }
@@ -1495,35 +1477,48 @@ actual fun MapScreen() {
                     ) {
                         Divider(color = Color(0xFFE2E8F0))
 
-                        InfoRow("Element:", zone.element)
-                        InfoRow("Degrees:", "${zone.startDeg}° - ${zone.endDeg}°")
-                        InfoRow("Pada / Entrance:", zone.pada)
-                        InfoRow("Shapes:", zone.shape)
-                        InfoRow("Good Colors:", zone.goodColor)
-                        InfoRow("Bad Colors:", zone.badColor)
-                        InfoRow("Good Metals:", zone.goodMetal)
-                        InfoRow("Bad Metals:", zone.badMetal)
+                        Text("PADA / ENTRANCE SPECIFICS", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, color = Saffron, letterSpacing = 1.sp)
+                        InfoRow("Deity / Energy:", pada.deity)
+                        InfoRow("Degrees:", "${pada.startDeg}° - ${pada.endDeg}°")
+                        InfoRow("Favorable Door:", if (pada.isFavorableEntrance) "Yes" else "No")
+                        
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Entrance Door Effect:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF334155))
+                        Text(pada.entranceEffect, fontSize = 12.5.sp, color = Color(0xFF64748B))
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Attributes & Effects:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF334155))
-                        Text(zone.effects.ifBlank { zone.attributes }, fontSize = 12.5.sp, color = Color(0xFF64748B))
+                        if (pada.entranceRemedy.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Entrance Remedy:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFDC2626))
+                            Text(pada.entranceRemedy, fontSize = 12.5.sp, color = Color(0xFF991B1B))
+                        }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Strictly Avoid:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFDC2626))
-                        Text(zone.strictlyAvoid.ifBlank { "None specified" }, fontSize = 12.5.sp, color = Color(0xFF991B1B))
+                        if (zone != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Divider(color = Color(0xFFE2E8F0))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            Text("MACRO ZONE ATTRIBUTES", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, color = VastuGreen, letterSpacing = 1.sp)
+                            InfoRow("Element:", zone.element)
+                            InfoRow("Good Colors:", zone.goodColor)
+                            InfoRow("Bad Colors:", zone.badColor)
+                            InfoRow("Good Metals:", zone.goodMetal)
+                            InfoRow("Bad Metals:", zone.badMetal)
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Recommended Remedies:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = VastuGreen)
-                        Text(zone.remedies.ifBlank { "Keep clean and well-balanced." }, fontSize = 12.5.sp, color = Color(0xFF065F46))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Zone Effects:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF334155))
+                            Text(zone.effects.ifBlank { zone.attributes }, fontSize = 12.5.sp, color = Color(0xFF64748B))
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Good Businesses:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF334155))
-                        Text(zone.goodBusiness.ifBlank { "General commerce" }, fontSize = 12.5.sp, color = Color(0xFF64748B))
+                            if (zone.strictlyAvoid.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Strictly Avoid:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFDC2626))
+                                Text(zone.strictlyAvoid, fontSize = 12.5.sp, color = Color(0xFF991B1B))
+                            }
+                        }
                     }
                 },
                 confirmButton = {
                     Button(
-                        onClick = { selectedVastuZone = null },
+                        onClick = { selectedVastuPada = null },
                         colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White),
                         shape = RoundedCornerShape(8.dp)
                     ) {
