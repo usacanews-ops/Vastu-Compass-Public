@@ -15,23 +15,24 @@ data class VastuDataPackage(
 data class VastuZone(
     val id: String,
     val name: String,
+    val sanskritName: String = "",
     val element: String,
+    val shape: String = "",
+    val goodColor: String = "",
+    val badColor: String = "",
+    val goodMetal: String = "",
+    val badMetal: String = "",
     val startDeg: Float,
     val endDeg: Float,
     val attributes: String,
     val pada: String,
     val effects: String,
     val remedies: String,
-    val goodColor: String = "",
-    val badColor: String = "",
-    val goodMetal: String = "",
-    val badMetal: String = "",
-    val shape: String = "",
-    val generalGoods: String = "",
-    val generalBads: String = "",
+    val strictlyAvoid: String = "",
     val goodBusiness: String = "",
     val badBusiness: String = "",
-    val strictlyAvoid: String = ""
+    val generalGoods: String = "",
+    val generalBads: String = ""
 )
 
 @Serializable
