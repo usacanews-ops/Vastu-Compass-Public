@@ -39,7 +39,7 @@ object VastuRepository {
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     suspend fun initialize() {
-        // 1. Load cached Vastu DB
+        // 1. Cargar base de datos local de Vastu
         try {
             val cachedJson = storage.loadData("vastu_db")
             if (!cachedJson.isNullOrBlank()) {
@@ -53,7 +53,7 @@ object VastuRepository {
             e.printStackTrace()
         }
 
-        // 2. Load cached Products
+        // 2. Cargar productos locales en caché
         try {
             val cachedProductsJson = storage.loadData("products_db")
             if (!cachedProductsJson.isNullOrBlank()) {
@@ -64,7 +64,7 @@ object VastuRepository {
             e.printStackTrace()
         }
 
-        // 3. Sync live data from server
+        // 3. Sincronizar datos con el servidor remoto
         CoroutineScope(Dispatchers.Default).launch {
             syncWithLiveServer()
         }
@@ -75,26 +75,24 @@ object VastuRepository {
         return try {
             val cacheBuster = Random.nextInt(10000, 99999)
 
-            // A. Sync Main Vastu Data
+            // A. Sincronización de vastu_data.json
             val url = "$LIVE_DATA_URL?v=$cacheBuster"
             val response = client.get(url).bodyAsText()
             val remoteData = jsonFormat.decodeFromString<VastuDataPackage>(response)
             val currentData = _dataFlow.value
 
-            var syncStatusMessage = ""
-
-            if (currentData == null || remoteData.version >= currentData.version) {
+            val syncStatusMessage = if (currentData == null || remoteData.version >= currentData.version) {
                 _dataFlow.value = remoteData
                 storage.saveData("vastu_db", response)
                 CoroutineScope(Dispatchers.Default).launch {
                     preloadIcons(remoteData.items)
                 }
-                syncStatusMessage = "Success! Updated to version ${remoteData.version}"
+                "Success! Updated to version ${remoteData.version}"
             } else {
-                syncStatusMessage = "Already up to date (Version ${currentData.version})"
+                "Already up to date (Version ${currentData.version})"
             }
 
-            // B. Sync Products Data
+            // B. Sincronización de products.json
             try {
                 val prodUrl = "$LIVE_PRODUCTS_URL?v=$cacheBuster"
                 val prodResponse = client.get(prodUrl).bodyAsText()
