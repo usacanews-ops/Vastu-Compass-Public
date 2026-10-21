@@ -56,11 +56,19 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.jks")
+            storePassword = "VastuPass123"
+            keyAlias = "vastucompass"
+            keyPassword = "VastuPass123"
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            // This signs the release APK so Android allows installation:
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
