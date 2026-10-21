@@ -406,7 +406,7 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
     }
 }
 
-// 32 Vastu Pada Sector Angles (Starting from 348.75° centered on 0° True North)
+// 32 Vastu Pada Sector Angles
 private val PADA_32_LIST = listOf(
     Pair("N1", 348.75f), Pair("N2", 360.0f), Pair("N3", 11.25f), Pair("N4", 22.5f),
     Pair("N5", 33.75f), Pair("N6", 45.0f), Pair("N7", 56.25f), Pair("N8", 67.5f),
@@ -622,7 +622,7 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Draggable Corner Markers (Red markers at 100% visibility when Chakra is active)
+            // 1. Draggable Corner Markers (Red points at 100% visibility when Chakra is drawn)
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
@@ -654,7 +654,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 2. Connecting Lines & Distance Badges (Completely hidden when VastuChakra is drawn)
+            // 2. Connecting Lines & Distance Badges (Hidden when VastuChakra is drawn)
             if (corners.size >= 2 && !isVastuChakraMode) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
@@ -735,15 +735,15 @@ actual fun MapScreen() {
 
                 // A. 32 Vastu Wedges
                 PADA_32_LIST.forEach { (padaName, startAngle) ->
-                    val adjustedStart = (startAngle + vastuRotationOffset) % 360f
+                    val adjustedStart = (startAngle + vastuRotationOffset + 360f) % 360f
                     val sweepAngle = 11.25f
-                    val endAngle = adjustedStart + sweepAngle
+                    val endAngle = (adjustedStart + sweepAngle) % 360f
                     val midAngle = (adjustedStart + (sweepAngle / 2f)) % 360f
 
                     val wedgePoints = mutableListOf<LatLng>().apply {
                         add(center)
                         for (step in 0..15) {
-                            val ang = adjustedStart + (sweepAngle * step / 15f)
+                            val ang = (adjustedStart + (sweepAngle * step / 15f)) % 360f
                             add(pointAtDistanceAndBearing(center, chakraRadiusMeters, ang.toDouble()))
                         }
                         add(center)
@@ -794,10 +794,13 @@ actual fun MapScreen() {
                     )
                 }
 
-                // B. LINE 1: RED SLIM LINE (Magnetic Compass North)
-                // Starts at Brahmasthan center -> Extends to (Chakra Radius + 20%) along deviceAzimuth
+                // B. LINE 1: RED SLIM LINE (Magnetic Compass North Pole)
+                // In geographical coordinates on Google Maps, Magnetic North is at (360 - deviceAzimuth + cameraBearing).
+                // This counter-rotates with the device so this line always points to the physical Magnetic North Pole.
+                val cameraHeading = cameraPositionState.position.bearing
+                val trueCompassBearing = (360.0 - deviceAzimuth + cameraHeading + 360.0) % 360.0
                 val compassNorthRadius = chakraRadiusMeters * 1.20
-                val compassNorthEnd = pointAtDistanceAndBearing(center, compassNorthRadius, deviceAzimuth.toDouble())
+                val compassNorthEnd = pointAtDistanceAndBearing(center, compassNorthRadius, trueCompassBearing)
 
                 Polyline(
                     points = listOf(center, compassNorthEnd),
@@ -806,11 +809,11 @@ actual fun MapScreen() {
                     zIndex = 6f
                 )
 
-                // C. LINE 2: BLUE SLIM LINE (Vastu Chakra / Map True North with Calibration Offset)
-                // Starts at Brahmasthan center -> Extends to (Chakra Radius - 10%) ending with dot
-                val vastuNorthAngle = (0f + vastuRotationOffset + 360f) % 360f
+                // C. LINE 2: BLUE SLIM LINE (Google Maps True North with Calibration Offset)
+                // True North on Google Maps is 0.0° geographic bearing. When calibrated, it rotates by vastuRotationOffset.
+                val vastuNorthAngle = (0.0 + vastuRotationOffset + 360.0) % 360.0
                 val vastuNorthRadius = chakraRadiusMeters * 0.90
-                val vastuNorthEnd = pointAtDistanceAndBearing(center, vastuNorthRadius, vastuNorthAngle.toDouble())
+                val vastuNorthEnd = pointAtDistanceAndBearing(center, vastuNorthRadius, vastuNorthAngle)
 
                 Polyline(
                     points = listOf(center, vastuNorthEnd),
@@ -819,10 +822,10 @@ actual fun MapScreen() {
                     zIndex = 7f
                 )
 
-                // Blue line termination dot (3x the line width = 9dp dot)
+                // Blue line termination dot (3x the line width)
                 Marker(
                     state = rememberMarkerState(
-                        key = "blue_dot_${formatDec(vastuNorthAngle.toDouble(), 2)}",
+                        key = "blue_dot_${formatDec(vastuNorthAngle, 2)}",
                         position = vastuNorthEnd
                     ),
                     icon = createCircleDotBadge(context, "#1E3A8A", radiusDp = 5f),
@@ -1121,7 +1124,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Right-Side Floating Buttons
+        // Right-Side Floating Buttons (including Set Map to North button)
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -1129,6 +1132,32 @@ actual fun MapScreen() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.End
         ) {
+            // "Set Map to North" Button: Rotates Google Map to True North (0° bearing)
+            FloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        val currentTarget = cameraPositionState.position.target
+                        val currentZoom = cameraPositionState.position.zoom
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newCameraPosition(
+                                CameraPosition.builder()
+                                    .target(currentTarget)
+                                    .zoom(currentZoom)
+                                    .bearing(0f) // Exact True North Alignment
+                                    .tilt(0f)
+                                    .build()
+                            )
+                        )
+                        Toast.makeText(context, "Map aligned to True North (0°)", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                backgroundColor = Color.White,
+                contentColor = Color(0xFF1E3A8A),
+                modifier = Modifier.size(46.dp)
+            ) {
+                Icon(Icons.Default.Explore, contentDescription = "Set Map to North", modifier = Modifier.size(24.dp))
+            }
+
             if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
                 ExtendedFloatingActionButton(
                     text = { Text("Add Crosshair", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
