@@ -257,7 +257,7 @@ fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
 
 /**
  * Creates an inward-pointing reverse arrow needle badge.
- * Points toward the bottom of the bitmap (i.e. toward the center when anchor is (0.5, 1.0)).
+ * Tip points directly toward the center when anchor is (0.5, 1.0).
  */
 fun createInwardPointerBadge(context: Context, text: String, colorHex: String): BitmapDescriptor {
     val width = 80
@@ -275,7 +275,7 @@ fun createInwardPointerBadge(context: Context, text: String, colorHex: String): 
         strokeWidth = 3f
     }
 
-    // Inward-pointing arrowhead (Tip is at center bottom: x = 40, y = 105)
+    // Inward-pointing arrowhead (Tip is at bottom center: x = 40, y = 105)
     val path = android.graphics.Path().apply {
         moveTo(40f, 105f) // Tip pointing inward
         lineTo(12f, 55f)
@@ -290,7 +290,6 @@ fun createInwardPointerBadge(context: Context, text: String, colorHex: String): 
     canvas.drawPath(path, arrowPaint)
     canvas.drawPath(path, strokePaint)
 
-    // Text Label above the arrow
     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.WHITE
         textSize = 22f
@@ -750,7 +749,7 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra 32 Sectors & Outer Labels (30% fill opacity, all rotating with offset)
+            // 5. Vastu Chakra 32 Sectors & Outer Labels (30% fill opacity, rotating with offset)
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
                 PADA_32_LIST.forEach { (padaName, startAngle) ->
@@ -822,9 +821,8 @@ actual fun MapScreen() {
                     title = "Vastu Chakra 0° North"
                 )
 
-                // Reverse Pointer (Compass Magnetic North Needle): Inward-pointing red needle positioned just outside
+                // Reverse Pointer (Compass Magnetic North Needle): Inward-pointing red needle positioned outside
                 // the Vastu Chakra rim along the real-time compass direction, facing the Brahmasthan center.
-                // When mobile faces True North, this red needle faces the blue Chakra North pointer tip-to-tip.
                 val compassOuterPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.38, deviceAzimuth.toDouble())
                 Marker(
                     state = rememberMarkerState(key = "compass_mag_needle_${deviceAzimuth.toInt()}", position = compassOuterPos),
