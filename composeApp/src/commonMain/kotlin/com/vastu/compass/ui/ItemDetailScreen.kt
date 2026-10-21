@@ -367,8 +367,9 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         
-                        val effectString = activeEffect?.note?.ifBlank { null }
-                            ?: if (isPadaSpecific) activePadaData?.entranceEffect else activeZoneData?.effects
+                        // FIX: Explicitly cast to String and wrap the if/else logic safely
+                        val effectString: String = activeEffect?.note?.takeIf { it.isNotBlank() }
+                            ?: (if (isPadaSpecific) activePadaData?.entranceEffect else activeZoneData?.effects)?.takeIf { it.isNotBlank() }
                             ?: "No specific effect recorded for this area."
                             
                         Text(
@@ -378,8 +379,9 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                             lineHeight = 20.sp
                         )
 
-                        val remedy = activeEffect?.remedy?.ifBlank { null } 
-                            ?: if (isPadaSpecific) activePadaData?.entranceRemedy?.ifBlank { null } else activeZoneData?.remedies?.ifBlank { null }
+                        // FIX: Safely wrap remedy logic
+                        val remedy: String? = activeEffect?.remedy?.takeIf { it.isNotBlank() }
+                            ?: (if (isPadaSpecific) activePadaData?.entranceRemedy else activeZoneData?.remedies)?.takeIf { it.isNotBlank() }
                             
                         if (remedy != null) {
                             val linkedProduct = activeEffect?.productId?.let { pid ->
@@ -541,7 +543,8 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                                 modifier = Modifier.width(46.dp)
                             )
                             Column {
-                                val subtitle = if (isPadaSpecific) {
+                                // FIX: Safely assign subtitle as String
+                                val subtitle: String = if (isPadaSpecific) {
                                     pkg?.padas?.firstOrNull { it.id == listKey }?.deity ?: "Pada"
                                 } else {
                                     ZONE_NAMES[listKey] ?: listKey
