@@ -11,7 +11,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.vastu.compass.data.VastuRepository
 import com.vastu.compass.ui.*
 import org.jetbrains.compose.resources.painterResource
@@ -26,6 +28,7 @@ val VastuGreen = Color(0xFF1B4D3E)
 sealed class Screen {
     object Compass : Screen()
     object Zones : Screen()
+    object Map : Screen()
     data class ItemDetail(val itemId: String) : Screen()
     object Problems : Screen()
     object More : Screen()
@@ -61,7 +64,7 @@ fun App() {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "CONSULT AN EXPERT",
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -70,28 +73,34 @@ fun App() {
                     contentColor = Color(0xFF3E2723)
                 ) {
                     BottomNavigationItem(
+                        selected = currentScreen is Screen.Map,
+                        onClick = { currentScreen = Screen.Map },
+                        icon = { Icon(Icons.Default.Map, contentDescription = "Plot Map") },
+                        label = { Text("Plot Map", fontSize = 11.sp) }
+                    )
+                    BottomNavigationItem(
                         selected = currentScreen is Screen.Compass,
                         onClick = { currentScreen = Screen.Compass },
                         icon = { Icon(Icons.Default.CompassCalibration, contentDescription = "Compass") },
-                        label = { Text("Compass") }
+                        label = { Text("Compass", fontSize = 11.sp) }
                     )
                     BottomNavigationItem(
                         selected = currentScreen is Screen.Zones,
                         onClick = { currentScreen = Screen.Zones },
                         icon = { Icon(Icons.Default.GridOn, contentDescription = "Zones") },
-                        label = { Text("Zones") }
+                        label = { Text("Zones", fontSize = 11.sp) }
                     )
                     BottomNavigationItem(
                         selected = currentScreen is Screen.Problems,
                         onClick = { currentScreen = Screen.Problems },
                         icon = { Icon(Icons.Default.Warning, contentDescription = "Problems") },
-                        label = { Text("Problems") }
+                        label = { Text("Problems", fontSize = 11.sp) }
                     )
                     BottomNavigationItem(
                         selected = currentScreen is Screen.More,
                         onClick = { currentScreen = Screen.More },
                         icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
-                        label = { Text("More") }
+                        label = { Text("More", fontSize = 11.sp) }
                     )
                 }
             }
@@ -120,6 +129,7 @@ fun App() {
                         is Screen.Compass -> CompassScreen()
                         is Screen.Zones -> ZonesScreen(onItemClick = { itemId -> currentScreen = Screen.ItemDetail(itemId) })
                         is Screen.ItemDetail -> ItemDetailScreen(itemId = screen.itemId, onBack = { currentScreen = Screen.Zones })
+                        is Screen.Map -> MapScreen()
                         is Screen.Problems -> ProblemsScreen()
                         is Screen.More -> MoreScreen()
                         is Screen.Consult -> ConsultScreen(onBack = { currentScreen = Screen.Compass })
