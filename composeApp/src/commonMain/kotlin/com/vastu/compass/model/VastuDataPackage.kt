@@ -26,15 +26,15 @@ data class VastuZone(
     val badMetal: String = "",
     val startDeg: Float,
     val endDeg: Float,
-    val attributes: String,
-    val pada: String,
-    val effects: String,
-    val remedies: String,
     val strictlyAvoid: String = "",
     val goodBusiness: String = "",
     val badBusiness: String = "",
     val generalGoods: String = "",
-    val generalBads: String = ""
+    val generalBads: String = "",
+    val attributes: String = "",
+    val effects: String = "",
+    val remedies: String = "",
+    val pada: String = "" // Kept for backward compatibility
 )
 
 @Serializable
