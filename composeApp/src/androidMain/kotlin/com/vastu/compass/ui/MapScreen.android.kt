@@ -83,7 +83,7 @@ fun calculateDistanceMeters(p1: LatLng, p2: LatLng): Float {
 }
 
 /**
- * Exact forward azimuth (bearing) between two LatLng points.
+ * Exact forward azimuth (bearing) between two LatLng points on the WGS84 ellipsoid.
  */
 fun calculateBearing(from: LatLng, to: LatLng): Float {
     val lat1 = Math.toRadians(from.latitude)
@@ -236,7 +236,7 @@ fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
     val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#F8FAFC")
         style = Paint.Style.FILL
-        alpha = 230
+        alpha = 235
     }
     val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#CBD5E1")
@@ -256,16 +256,15 @@ fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
 }
 
 /**
- * Creates an inward-pointing reverse arrow needle badge.
- * Tip points directly toward the center when anchor is (0.5, 1.0).
+ * Solid circular dot termination badge (3x line width).
  */
-fun createInwardPointerBadge(context: Context, text: String, colorHex: String): BitmapDescriptor {
-    val width = 80
-    val height = 110
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+fun createCircleDotBadge(context: Context, colorHex: String, radiusDp: Float): BitmapDescriptor {
+    val px = (radiusDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(6)
+    val size = px * 2
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = AndroidCanvas(bitmap)
 
-    val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor(colorHex)
         style = Paint.Style.FILL
     }
@@ -275,28 +274,8 @@ fun createInwardPointerBadge(context: Context, text: String, colorHex: String): 
         strokeWidth = 3f
     }
 
-    // Inward-pointing arrowhead (Tip is at bottom center: x = 40, y = 105)
-    val path = android.graphics.Path().apply {
-        moveTo(40f, 105f) // Tip pointing inward
-        lineTo(12f, 55f)
-        lineTo(28f, 55f)
-        lineTo(28f, 10f)
-        lineTo(52f, 10f)
-        lineTo(52f, 55f)
-        lineTo(68f, 55f)
-        close()
-    }
-
-    canvas.drawPath(path, arrowPaint)
-    canvas.drawPath(path, strokePaint)
-
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        textSize = 22f
-        isFakeBoldText = true
-        textAlign = Paint.Align.CENTER
-    }
-    canvas.drawText(text, 40f, 42f, textPaint)
+    canvas.drawCircle(px.toFloat(), px.toFloat(), (px - 2).toFloat(), fillPaint)
+    canvas.drawCircle(px.toFloat(), px.toFloat(), (px - 2).toFloat(), strokePaint)
 
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
@@ -427,6 +406,7 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
     }
 }
 
+// 32 Vastu Pada Sector Angles (Starting from 348.75° centered on 0° True North)
 private val PADA_32_LIST = listOf(
     Pair("N1", 348.75f), Pair("N2", 360.0f), Pair("N3", 11.25f), Pair("N4", 22.5f),
     Pair("N5", 33.75f), Pair("N6", 45.0f), Pair("N7", 56.25f), Pair("N8", 67.5f),
@@ -642,7 +622,7 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Corner Markers
+            // 1. Draggable Corner Markers (Red markers at 100% visibility when Chakra is active)
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
@@ -674,7 +654,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 2. Connecting Lines & Distance Badges
+            // 2. Connecting Lines & Distance Badges (Completely hidden when VastuChakra is drawn)
             if (corners.size >= 2 && !isVastuChakraMode) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
@@ -736,7 +716,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 4. Centroid Marker
+            // 4. Centroid Marker (Hidden in VastuChakra mode in favor of the blue dot)
             centroid?.let { centerPoint ->
                 if (!isVastuChakraMode) {
                     val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
@@ -749,14 +729,16 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra 32 Sectors & Outer Labels (30% fill opacity, rotating with offset)
+            // 5. Vastu Chakra: 32 Sectors (30% Opacity), Calibrated Dynamic Labels, and Slim Alignment Lines
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
+
+                // A. 32 Vastu Wedges
                 PADA_32_LIST.forEach { (padaName, startAngle) ->
-                    val adjustedStart = startAngle + vastuRotationOffset
+                    val adjustedStart = (startAngle + vastuRotationOffset) % 360f
                     val sweepAngle = 11.25f
                     val endAngle = adjustedStart + sweepAngle
-                    val midAngle = adjustedStart + (sweepAngle / 2f)
+                    val midAngle = (adjustedStart + (sweepAngle / 2f)) % 360f
 
                     val wedgePoints = mutableListOf<LatLng>().apply {
                         add(center)
@@ -771,8 +753,8 @@ actual fun MapScreen() {
 
                     Polygon(
                         points = wedgePoints,
-                        fillColor = zoneColor.copy(alpha = 0.30f), // 30% fill opacity
-                        strokeColor = Color(0xFF1E293B).copy(alpha = 0.6f),
+                        fillColor = zoneColor.copy(alpha = 0.30f), // Exactly 30% fill opacity
+                        strokeColor = Color(0xFF1E293B).copy(alpha = 0.5f),
                         strokeWidth = 1.5f,
                         clickable = true,
                         onClick = {
@@ -798,10 +780,13 @@ actual fun MapScreen() {
                         }
                     )
 
-                    // Pada labels dynamically rotate along with the Chakra
-                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.13, midAngle.toDouble())
+                    // Direction labels dynamically rotate around the perimeter in lockstep with slider calibration
+                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.12, midAngle.toDouble())
                     Marker(
-                        state = rememberMarkerState(key = "chakra_lbl_${padaName}_${formatDec(vastuRotationOffset.toDouble(), 1)}", position = labelPos),
+                        state = rememberMarkerState(
+                            key = "lbl_${padaName}_${formatDec(adjustedStart.toDouble(), 2)}",
+                            position = labelPos
+                        ),
                         icon = createChakraLabelBadge(context, padaName),
                         anchor = Offset(0.5f, 0.5f),
                         flat = true,
@@ -809,36 +794,51 @@ actual fun MapScreen() {
                     )
                 }
 
-                // Dedicated Vastu Chakra North Pointer (Fixed to Chakra's rotated 0 deg True North)
-                val chakraNorthPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.25, vastuRotationOffset.toDouble())
-                Marker(
-                    state = rememberMarkerState(key = "chakra_north_ptr_${formatDec(vastuRotationOffset.toDouble(), 1)}", position = chakraNorthPos),
-                    icon = createInwardPointerBadge(context, "N", "#1E3A8A"), // Blue inward arrow for Chakra North
-                    anchor = Offset(0.5f, 1.0f),
-                    rotation = vastuRotationOffset + 180f,
-                    flat = true,
-                    zIndex = 5f,
-                    title = "Vastu Chakra 0° North"
+                // B. LINE 1: RED SLIM LINE (Magnetic Compass North)
+                // Starts at Brahmasthan center -> Extends to (Chakra Radius + 20%) along deviceAzimuth
+                val compassNorthRadius = chakraRadiusMeters * 1.20
+                val compassNorthEnd = pointAtDistanceAndBearing(center, compassNorthRadius, deviceAzimuth.toDouble())
+
+                Polyline(
+                    points = listOf(center, compassNorthEnd),
+                    color = Color(0xFFDC2626), // Solid Red
+                    width = 3f, // Slim 1px line
+                    zIndex = 6f
                 )
 
-                // Reverse Pointer (Compass Magnetic North Needle): Inward-pointing red needle positioned outside
-                // the Vastu Chakra rim along the real-time compass direction, facing the Brahmasthan center.
-                val compassOuterPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.38, deviceAzimuth.toDouble())
-                Marker(
-                    state = rememberMarkerState(key = "compass_mag_needle_${deviceAzimuth.toInt()}", position = compassOuterPos),
-                    icon = createInwardPointerBadge(context, "MAG", "#DC2626"), // Red inward arrow for Magnetic Compass
-                    anchor = Offset(0.5f, 1.0f),
-                    rotation = (deviceAzimuth + 180f) % 360f, // Rotated 180 deg so tip points inward to center
-                    flat = true,
-                    zIndex = 6f,
-                    title = "Magnetic North (${deviceAzimuth.toInt()}°)"
+                // C. LINE 2: BLUE SLIM LINE (Vastu Chakra / Map True North with Calibration Offset)
+                // Starts at Brahmasthan center -> Extends to (Chakra Radius - 10%) ending with dot
+                val vastuNorthAngle = (0f + vastuRotationOffset + 360f) % 360f
+                val vastuNorthRadius = chakraRadiusMeters * 0.90
+                val vastuNorthEnd = pointAtDistanceAndBearing(center, vastuNorthRadius, vastuNorthAngle.toDouble())
+
+                Polyline(
+                    points = listOf(center, vastuNorthEnd),
+                    color = Color(0xFF1E3A8A), // Solid Deep Blue
+                    width = 3f, // Slim 1px line
+                    zIndex = 7f
                 )
 
-                // Blue dot at exact center
+                // Blue line termination dot (3x the line width = 9dp dot)
                 Marker(
-                    state = rememberMarkerState(key = "chakra_center_dot", position = center),
-                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
-                    zIndex = 5f,
+                    state = rememberMarkerState(
+                        key = "blue_dot_${formatDec(vastuNorthAngle.toDouble(), 2)}",
+                        position = vastuNorthEnd
+                    ),
+                    icon = createCircleDotBadge(context, "#1E3A8A", radiusDp = 5f),
+                    anchor = Offset(0.5f, 0.5f),
+                    flat = true,
+                    zIndex = 8f,
+                    title = "Chakra North (0°)"
+                )
+
+                // D. Center Blue Dot (Terminating Center for both lines, 100% visible)
+                Marker(
+                    state = rememberMarkerState(key = "center_blue_dot", position = center),
+                    icon = createCircleDotBadge(context, "#1E3A8A", radiusDp = 7f),
+                    anchor = Offset(0.5f, 0.5f),
+                    flat = true,
+                    zIndex = 9f,
                     title = "Brahmasthan (Center)"
                 )
             }
@@ -991,7 +991,7 @@ actual fun MapScreen() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("North Offset: ", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color(0xFF1E293B))
+                            Text("North Calibration Offset: ", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color(0xFF1E293B))
                             Text("${formatDec(vastuRotationOffset.toDouble(), 1)}°", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Saffron)
                         }
 
@@ -1014,7 +1014,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Box 1: Length Input & Collinear Distance Updater
+        // Box 1: Length Input & Collinear Distance Updater (Hidden when VastuChakra is active)
         if (corners.isNotEmpty() && centroid == null) {
             val isEditing = editingEdgeIndex != null
             val nextIndex = corners.size
@@ -1193,7 +1193,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Bottom Action Controls (ReCalculate, Go to Center, VastuChakra)
+        // Bottom Action Controls: ReCalculate, Go to Center, VastuChakra
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
