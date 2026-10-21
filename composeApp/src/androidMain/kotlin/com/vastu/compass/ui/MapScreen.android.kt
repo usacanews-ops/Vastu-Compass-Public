@@ -216,9 +216,6 @@ fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, i
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-/**
- * Generates a clean text badge for the 32 Vastu Chakra sector labels placed just outside the outer edge.
- */
 fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#0F172A")
@@ -384,7 +381,6 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
     }
 }
 
-// 32 Vastu Pada Definitions and Color mapping
 private val PADA_32_LIST = listOf(
     Pair("N1", 348.75f), Pair("N2", 360.0f), Pair("N3", 11.25f), Pair("N4", 22.5f),
     Pair("N5", 33.75f), Pair("N6", 45.0f), Pair("N7", 56.25f), Pair("N8", 67.5f),
@@ -441,11 +437,11 @@ actual fun MapScreen() {
 
     var isGuidingMode by remember { mutableStateOf(false) }
     var isVastuChakraMode by remember { mutableStateOf(false) }
+    var vastuRotationOffset by remember { mutableStateOf(0f) } // Calibration offset for True vs Magnetic North
     var mapType by remember { mutableStateOf(MapType.HYBRID) }
     var distanceInputText by remember { mutableStateOf("") }
     var editingEdgeIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Selected Vastu Zone for Dialog Modal
     var selectedVastuZone by remember { mutableStateOf<VastuZone?>(null) }
 
     var hasFineLocationPermission by remember {
@@ -566,7 +562,6 @@ actual fun MapScreen() {
         return if (index < 26) ('A' + index).toString() else "P${index + 1}"
     }
 
-    // Maximum distance from centroid to any corner marker (Radius for Vastu Chakra)
     val chakraRadiusMeters = remember(centroid, corners) {
         if (centroid != null && corners.isNotEmpty()) {
             corners.maxOf { calculateDistanceMeters(centroid!!, it).toDouble() }.coerceAtLeast(5.0)
@@ -601,7 +596,7 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Draggable Corner Markers (100% visible red points when VastuChakra is active)
+            // 1. Draggable Corner Markers
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
@@ -633,7 +628,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 2. Connecting Lines & Distance Badges (Hidden when VastuChakra is active)
+            // 2. Connecting Lines & Distance Badges
             if (corners.size >= 2 && !isVastuChakraMode) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
@@ -695,7 +690,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 4. Centroid: Azure marker normally, or hidden during VastuChakra mode
+            // 4. Centroid Marker
             centroid?.let { centerPoint ->
                 if (!isVastuChakraMode) {
                     val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
@@ -708,20 +703,19 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra 32 Sectors & Outer Labels (True North Aligned to 0 deg)
+            // 5. Vastu Chakra 32 Sectors & Outer Labels (True North Aligned to 0 deg + Rotation Offset)
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
                 PADA_32_LIST.forEach { (padaName, startAngle) ->
+                    val adjustedStart = startAngle + vastuRotationOffset
                     val sweepAngle = 11.25f
-                    val endAngle = startAngle + sweepAngle
-                    val midAngle = startAngle + (sweepAngle / 2f)
+                    val endAngle = adjustedStart + sweepAngle
+                    val midAngle = adjustedStart + (sweepAngle / 2f)
 
-                    // Build polygon wedge for sector (True North 0 deg aligned)
                     val wedgePoints = mutableListOf<LatLng>().apply {
                         add(center)
-                        // 15 angular interpolation steps along arc for smooth curvature on spherical earth
                         for (step in 0..15) {
-                            val ang = startAngle + (sweepAngle * step / 15f)
+                            val ang = adjustedStart + (sweepAngle * step / 15f)
                             add(pointAtDistanceAndBearing(center, chakraRadiusMeters, ang.toDouble()))
                         }
                         add(center)
@@ -731,12 +725,11 @@ actual fun MapScreen() {
 
                     Polygon(
                         points = wedgePoints,
-                        fillColor = zoneColor.copy(alpha = 0.50f), // 50% fill
+                        fillColor = zoneColor.copy(alpha = 0.50f),
                         strokeColor = Color(0xFF1E293B).copy(alpha = 0.6f),
                         strokeWidth = 1.5f,
                         clickable = true,
                         onClick = {
-                            // Find matching zone in vastuPkg
                             val baseZoneKey = when {
                                 padaName.startsWith("N") -> "N"
                                 padaName.startsWith("E") -> "E"
@@ -749,7 +742,7 @@ actual fun MapScreen() {
                                     id = baseZoneKey,
                                     name = baseZoneKey,
                                     element = "Vastu",
-                                    startDeg = startAngle,
+                                    startDeg = adjustedStart,
                                     endDeg = endAngle,
                                     attributes = "Vastu Chakra sector $padaName",
                                     pada = padaName,
@@ -759,7 +752,6 @@ actual fun MapScreen() {
                         }
                     )
 
-                    // Outer Label Marker placed just outside outer edge
                     val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.12, midAngle.toDouble())
                     Marker(
                         state = rememberMarkerState(key = "chakra_lbl_$padaName", position = labelPos),
@@ -770,7 +762,6 @@ actual fun MapScreen() {
                     )
                 }
 
-                // Blue dot at exact center
                 Marker(
                     state = rememberMarkerState(key = "chakra_center_dot", position = center),
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
@@ -909,6 +900,37 @@ actual fun MapScreen() {
             }
         }
 
+        // Vastu Chakra Rotation Calibration Slider Card (Appears above Box 1 when Vastu Chakra is active)
+        if (isVastuChakraMode && centroid != null) {
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 74.dp, start = 10.dp, end = 10.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                backgroundColor = Color.White,
+                elevation = 5.dp
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("North Calibration Offset", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color(0xFF1E293B))
+                        Text("${formatDec(vastuRotationOffset.toDouble(), 1)}°", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Saffron)
+                    }
+                    Slider(
+                        value = vastuRotationOffset,
+                        onValueChange = { vastuRotationOffset = it },
+                        valueRange = -45f..45f,
+                        steps = 89,
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+            }
+        }
+
         // Box 1: Length Input & Collinear Distance Updater
         if (corners.isNotEmpty() && centroid == null) {
             val isEditing = editingEdgeIndex != null
@@ -1016,13 +1038,50 @@ actual fun MapScreen() {
             }
         }
 
-        // Right-Side Floating Buttons
+        // Right-Side Floating Buttons & Live Compass Needle Widget
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.End
         ) {
+            // Live Floating Compass Rose Widget (Shows real-time mobile compass heading with Red North pointer)
+            Card(
+                modifier = Modifier.size(58.dp),
+                shape = CircleShape,
+                backgroundColor = Color.White.copy(alpha = 0.95f),
+                elevation = 4.dp
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .rotate(-deviceAzimuth),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.size(46.dp)) {
+                        val c = Offset(size.width / 2, size.height / 2)
+                        // North Red Arrow Pointer
+                        val pathNorth = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(c.x, c.y - 18.dp.toPx())
+                            lineTo(c.x - 5.dp.toPx(), c.y)
+                            lineTo(c.x + 5.dp.toPx(), c.y)
+                            close()
+                        }
+                        drawPath(pathNorth, color = Color(0xFFDC2626))
+
+                        // South Grey Arrow Pointer
+                        val pathSouth = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(c.x, c.y + 18.dp.toPx())
+                            lineTo(c.x - 5.dp.toPx(), c.y)
+                            lineTo(c.x + 5.dp.toPx(), c.y)
+                            close()
+                        }
+                        drawPath(pathSouth, color = Color(0xFF94A3B8))
+                    }
+                }
+            }
+
             if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
                 ExtendedFloatingActionButton(
                     text = { Text("Add Crosshair", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
@@ -1081,13 +1140,13 @@ actual fun MapScreen() {
                 },
                 backgroundColor = Color.White,
                 contentColor = Color(0xFF1E293B),
-                modifier = Modifier.size(46.dp).align(Alignment.End)
+                modifier = Modifier.size(46.dp)
             ) {
                 Icon(Icons.Default.MyLocation, contentDescription = "My Location", modifier = Modifier.size(22.dp))
             }
         }
 
-        // Bottom Action Controls (3 Buttons when calculated: ReCalculate, Mark Center, Draw VastuChakra)
+        // Bottom Action Controls
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1258,7 +1317,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Rich Vastu Zone Details Modal Dialog (Triggered when tapping any Vastu Chakra sector)
+        // Rich Vastu Zone Details Modal Dialog
         if (selectedVastuZone != null) {
             val zone = selectedVastuZone!!
             AlertDialog(
