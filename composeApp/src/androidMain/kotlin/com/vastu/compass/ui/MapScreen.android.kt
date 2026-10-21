@@ -75,9 +75,6 @@ fun calculateBearing(from: LatLng, to: LatLng): Float {
     return ((bearing + 360) % 360).toFloat()
 }
 
-/**
- * Calculates a target destination LatLng given starting origin, distance in meters, and bearing.
- */
 fun pointAtDistanceAndBearing(origin: LatLng, distanceMeters: Double, bearingDegrees: Double): LatLng {
     val distRatio = distanceMeters / EARTH_RADIUS_METERS
     val brngRad = Math.toRadians(bearingDegrees)
@@ -147,7 +144,7 @@ fun createDistanceBadge(context: Context, text: String, isOpaque: Boolean): Bitm
         color = android.graphics.Color.BLACK
         textSize = 34f
         isFakeBoldText = true
-        alpha = if (isOpaque) 128 else 255
+        alpha = if (isOpaque) 130 else 255
     }
     val bounds = Rect()
     paint.getTextBounds(text, 0, text.length, bounds)
@@ -163,13 +160,13 @@ fun createDistanceBadge(context: Context, text: String, isOpaque: Boolean): Bitm
     val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.WHITE
         style = Paint.Style.FILL
-        alpha = if (isOpaque) 128 else 245
+        alpha = if (isOpaque) 130 else 245
     }
     val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.DKGRAY
         style = Paint.Style.STROKE
         strokeWidth = 3f
-        alpha = if (isOpaque) 128 else 255
+        alpha = if (isOpaque) 130 else 255
     }
 
     val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
@@ -183,7 +180,6 @@ fun createDistanceBadge(context: Context, text: String, isOpaque: Boolean): Bitm
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-// Device Storage Helpers
 private const val PREFS_NAME = "vastu_map_prefs"
 private const val KEY_PLOT_DATA = "saved_plot_json"
 
@@ -217,7 +213,6 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
     points.forEach { pt ->
         kmlCoordinates.append("%.9f,%.9f,0\n".format(pt.longitude, pt.latitude))
     }
-    // Close polygon loop
     kmlCoordinates.append("%.9f,%.9f,0\n".format(points[0].longitude, points[0].latitude))
 
     val kmlContent = """
@@ -293,18 +288,23 @@ actual fun MapScreen() {
 
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
+    var userAccuracyMeters by remember { mutableStateOf<Float?>(null) }
 
+    // High Precision Location Loop (zero distance threshold for real-time accuracy)
     DisposableEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@DisposableEffect onDispose {}
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-            .setMinUpdateIntervalMillis(500L)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
+            .setMinUpdateIntervalMillis(250L)
+            .setMinUpdateDistanceMeters(0f)
+            .setMaxUpdateDelayMillis(1000L)
             .build()
 
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
                     userLocation = LatLng(loc.latitude, loc.longitude)
+                    userAccuracyMeters = if (loc.hasAccuracy()) loc.accuracy else null
                 }
             }
         }
@@ -321,22 +321,16 @@ actual fun MapScreen() {
     }
 
     val corners = remember { mutableStateListOf<LatLng>() }
-    // Keeps distance constraints: Key = Marker index, Value = locked distance in meters from previous marker (index - 1)
-    val distanceConstraints = remember { mutableStateMapOf<Int, Double>() }
-
     var centroid by remember { mutableStateOf<LatLng?>(null) }
     var totalAreaSqFt by remember { mutableStateOf(0.0) }
     var isGuidingMode by remember { mutableStateOf(false) }
     var mapType by remember { mutableStateOf(MapType.HYBRID) }
 
-    // Dialog state for editing edge length
+    // Top Box Input State
+    var distanceInputText by remember { mutableStateOf("") }
     var editingEdgeIndex by remember { mutableStateOf<Int?>(null) }
-    var editDistanceInput by remember { mutableStateOf("") }
 
-    // Input state for adding next fixed marker
-    var nextMarkerDistanceText by remember { mutableStateOf("") }
-
-    // Persistent storage auto-restore
+    // Auto-restore saved markings on launch
     LaunchedEffect(Unit) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val savedData = prefs.getString(KEY_PLOT_DATA, null)
@@ -364,7 +358,7 @@ actual fun MapScreen() {
         }
     }
 
-    // Centering on initial user GPS
+    // Auto-focus camera on user GPS coordinates on first lock
     var hasCenteredFirstTime by remember { mutableStateOf(false) }
     LaunchedEffect(userLocation) {
         if (!hasCenteredFirstTime && userLocation != null && corners.isEmpty()) {
@@ -373,7 +367,7 @@ actual fun MapScreen() {
         }
     }
 
-    // Direction arrow: GPS -> Brahmasthan
+    // Compass & Distance Vector strictly towards calculated Brahmasthan
     val distanceToCentroid = remember(userLocation, centroid) {
         if (userLocation != null && centroid != null) calculateDistanceMeters(userLocation!!, centroid!!) else null
     }
@@ -411,38 +405,25 @@ actual fun MapScreen() {
             onMapClick = { latLng ->
                 if (!isGuidingMode && centroid == null) {
                     corners.add(latLng)
+                    editingEdgeIndex = null
+                    distanceInputText = ""
                 }
             }
         ) {
-            // 1. Draggable Markers (Works for any A, B, C, D... with radial constraint enforcement)
+            // 1. Draggable Markers with Live Line Connection
             corners.forEachIndexed { index, point ->
-                val markerState = rememberMarkerState(
-                    key = "marker_${index}",
-                    position = point
-                )
+                val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
-                // Sync marker position when dragged
-                LaunchedEffect(markerState.dragState) {
-                    if (markerState.dragState == DragState.DRAG) {
-                        val draggedPos = markerState.position
-
-                        if (distanceConstraints.containsKey(index) && index > 0) {
-                            // Enforce fixed radius around previous marker
-                            val prevMarker = corners[index - 1]
-                            val currentBearing = calculateBearing(prevMarker, draggedPos)
-                            val constrainedDistance = distanceConstraints[index]!!
-                            val newConstrainedPos = pointAtDistanceAndBearing(prevMarker, constrainedDistance, currentBearing.toDouble())
-
-                            corners[index] = newConstrainedPos
-                            markerState.position = newConstrainedPos
-                        } else {
-                            corners[index] = draggedPos
-                        }
-
-                        if (centroid != null) {
-                            val (newCentroid, newArea) = calculateCentroidAndArea(corners)
-                            centroid = newCentroid
-                            totalAreaSqFt = newArea
+                // Continuous real-time drag position synchronization
+                LaunchedEffect(markerState) {
+                    snapshotFlow { markerState.position }.collect { livePos ->
+                        if (index < corners.size && corners[index] != livePos) {
+                            corners[index] = livePos
+                            if (centroid != null) {
+                                val (newCentroid, newArea) = calculateCentroidAndArea(corners)
+                                centroid = newCentroid
+                                totalAreaSqFt = newArea
+                            }
                         }
                     }
                 }
@@ -455,7 +436,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 2. Lines & Interactive Distance Badges (Clickable to edit distance)
+            // 2. Continuous Connecting Lines & Interactive Badges
             if (corners.size >= 2) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
@@ -480,17 +461,17 @@ actual fun MapScreen() {
                         flat = true,
                         alpha = lineAlpha,
                         onClick = {
-                            if (!isGuidingMode) {
+                            if (!isGuidingMode && centroid == null) {
                                 editingEdgeIndex = i
-                                editDistanceInput = "%.1f".format(distanceFeet)
+                                distanceInputText = "%.1f".format(distanceFeet)
                             }
-                            true
+                            true // Consumes the click event so map click is NOT triggered
                         }
                     )
                 }
             }
 
-            // 3. Shaded Polygon
+            // 3. Enclosed Property Polygon
             if (corners.size >= 3) {
                 Polygon(
                     points = corners.toList(),
@@ -500,7 +481,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 4. Centroid Marker
+            // 4. Centroid (Brahmasthan) Marker
             centroid?.let { centerPoint ->
                 Marker(
                     state = rememberMarkerState(key = "centroid", position = centerPoint),
@@ -510,32 +491,33 @@ actual fun MapScreen() {
             }
         }
 
-        // Top Control Bar
+        // Top Bar: 70% Width to prevent logo overlap, renamed to "MARK MAP"
         Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, start = 12.dp, end = 12.dp),
+                .fillMaxWidth(0.70f)
+                .align(Alignment.TopEnd)
+                .padding(top = 16.dp, end = 12.dp),
             shape = RoundedCornerShape(14.dp),
             backgroundColor = Color.White.copy(alpha = 0.95f),
             elevation = 4.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("PROPERTY PLOTTER", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Color(0xFF1E293B))
+                    Text("MARK MAP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color(0xFF1E293B))
                     if (centroid != null) {
                         Text(
-                            text = "Area: ${"%,.1f".format(totalAreaSqFt)} sq. ft.",
-                            fontSize = 13.sp,
+                            text = "${"%,.1f".format(totalAreaSqFt)} sq. ft.",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = VastuGreen
                         )
                     } else {
                         Text(
-                            text = if (corners.isEmpty()) "Tap corners on map" else "${corners.size} points placed (Tap distance badge to edit)",
+                            text = if (corners.isEmpty()) "Tap or add corners" else "${corners.size} corners placed",
                             fontSize = 11.sp,
                             color = Color.Gray
                         )
@@ -546,15 +528,15 @@ actual fun MapScreen() {
                     if (centroid != null) {
                         IconButton(onClick = {
                             savePlotToStorage(context, corners, centroid, totalAreaSqFt)
-                            Toast.makeText(context, "Plot & Centroid saved to device", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Plot saved", Toast.LENGTH_SHORT).show()
                         }) {
-                            Icon(Icons.Default.Save, contentDescription = "Save Plot", tint = VastuGreen)
+                            Icon(Icons.Default.Save, contentDescription = "Save", tint = VastuGreen, modifier = Modifier.size(20.dp))
                         }
 
                         IconButton(onClick = {
                             exportKml(context, corners, centroid, totalAreaSqFt)
                         }) {
-                            Icon(Icons.Default.Share, contentDescription = "Export KML", tint = Saffron)
+                            Icon(Icons.Default.Share, contentDescription = "Export", tint = Saffron, modifier = Modifier.size(20.dp))
                         }
                     }
 
@@ -564,36 +546,47 @@ actual fun MapScreen() {
                         Icon(
                             if (mapType == MapType.HYBRID) Icons.Default.Layers else Icons.Default.Satellite,
                             contentDescription = "Map Style",
-                            tint = Color(0xFF334155)
+                            tint = Color(0xFF334155),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
                     if (corners.isNotEmpty()) {
                         IconButton(onClick = {
                             corners.clear()
-                            distanceConstraints.clear()
                             centroid = null
                             totalAreaSqFt = 0.0
                             isGuidingMode = false
+                            editingEdgeIndex = null
+                            distanceInputText = ""
                             savePlotToStorage(context, emptyList(), null, 0.0)
                         }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = Color(0xFFDC2626))
+                            Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
         }
 
-        // Fixed-Length Next Marker Input Bar (Works for any next marker)
+        // Top Box: Length Input & Tap-To-Update Mode
         if (corners.isNotEmpty() && centroid == null) {
+            val isEditing = editingEdgeIndex != null
             val nextIndex = corners.size
-            val prevLabel = getPointLabel(nextIndex - 1)
-            val nextLabel = getPointLabel(nextIndex)
+
+            val boxLabel = if (isEditing) {
+                val p1 = getPointLabel(editingEdgeIndex!!)
+                val p2 = getPointLabel((editingEdgeIndex!! + 1) % corners.size)
+                "Edit Length $p1-$p2 (ft)"
+            } else {
+                val prev = getPointLabel(nextIndex - 1)
+                val nxt = getPointLabel(nextIndex)
+                "Length $prev->$nxt (ft)"
+            }
 
             Card(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 86.dp, start = 16.dp, end = 16.dp)
+                    .padding(top = 82.dp, start = 14.dp, end = 14.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 backgroundColor = Color.White,
@@ -604,108 +597,114 @@ actual fun MapScreen() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
-                        value = nextMarkerDistanceText,
-                        onValueChange = { nextMarkerDistanceText = it },
-                        label = { Text("Length $prevLabel->$nextLabel (ft)", fontSize = 11.sp) },
+                        value = distanceInputText,
+                        onValueChange = { distanceInputText = it },
+                        label = { Text(boxLabel, fontSize = 11.sp) },
                         placeholder = { Text("e.g. 43.5") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.weight(1f).height(52.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val ft = nextMarkerDistanceText.toDoubleOrNull()
-                            if (ft != null && ft > 0) {
-                                val meters = ft * FEET_TO_METERS
-                                val origin = corners.last()
-                                val newPos = pointAtDistanceAndBearing(origin, meters, 90.0)
-                                distanceConstraints[nextIndex] = meters
-                                corners.add(newPos)
-                                nextMarkerDistanceText = ""
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Add $nextLabel", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                    if (isEditing) {
+                        Button(
+                            onClick = {
+                                val ft = distanceInputText.toDoubleOrNull()
+                                if (ft != null && ft > 0 && editingEdgeIndex != null) {
+                                    val edge = editingEdgeIndex!!
+                                    val p1 = corners[edge]
+                                    val p2Idx = (edge + 1) % corners.size
+                                    val currentAngle = calculateBearing(p1, corners[p2Idx])
+                                    val newPos = pointAtDistanceAndBearing(p1, ft * FEET_TO_METERS, currentAngle.toDouble())
+                                    corners[p2Idx] = newPos
+                                }
+                                editingEdgeIndex = null
+                                distanceInputText = ""
+                            },
+                            colors = ButtonDefaults.buttonColors(backgroundColor = VastuGreen, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Text("Update", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        IconButton(onClick = {
+                            editingEdgeIndex = null
+                            distanceInputText = ""
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = Color.Gray)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                val ft = distanceInputText.toDoubleOrNull()
+                                if (ft != null && ft > 0) {
+                                    val meters = ft * FEET_TO_METERS
+                                    val origin = corners.last()
+                                    // Use trajectory of existing segment or compass azimuth for natural placement
+                                    val spawnAngle = if (corners.size >= 2) {
+                                        calculateBearing(corners[corners.size - 2], origin).toDouble()
+                                    } else {
+                                        deviceAzimuth.toDouble()
+                                    }
+                                    val newPos = pointAtDistanceAndBearing(origin, meters, spawnAngle)
+                                    corners.add(newPos)
+                                    distanceInputText = ""
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Text("Add ${getPointLabel(nextIndex)}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
                     }
                 }
             }
         }
 
-        // Tap-to-Edit Distance Dialog
-        if (editingEdgeIndex != null) {
-            val edgeIdx = editingEdgeIndex!!
-            val p1Idx = edgeIdx
-            val p2Idx = (edgeIdx + 1) % corners.size
-
-            AlertDialog(
-                onDismissRequest = { editingEdgeIndex = null },
-                title = { Text("Edit Length ${getPointLabel(p1Idx)} - ${getPointLabel(p2Idx)}", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column {
-                        Text("Enter new distance in feet. Marker ${getPointLabel(p2Idx)} will adjust along the same line:", fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = editDistanceInput,
-                            onValueChange = { editDistanceInput = it },
-                            label = { Text("Distance (ft)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            val newFt = editDistanceInput.toDoubleOrNull()
-                            if (newFt != null && newFt > 0) {
-                                val newMeters = newFt * FEET_TO_METERS
-                                val origin = corners[p1Idx]
-                                val currentBearing = calculateBearing(origin, corners[p2Idx])
-                                val updatedPos = pointAtDistanceAndBearing(origin, newMeters, currentBearing.toDouble())
-
-                                corners[p2Idx] = updatedPos
-                                distanceConstraints[p2Idx] = newMeters
-
-                                if (centroid != null) {
-                                    val (newCentroid, newArea) = calculateCentroidAndArea(corners)
-                                    centroid = newCentroid
-                                    totalAreaSqFt = newArea
-                                }
-                            }
-                            editingEdgeIndex = null
-                        },
-                        colors = ButtonDefaults.buttonColors(backgroundColor = VastuGreen, contentColor = Color.White)
-                    ) {
-                        Text("Update Distance")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { editingEdgeIndex = null }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-
-        // Floating My Location Button
-        FloatingActionButton(
-            onClick = {
-                userLocation?.let { loc ->
-                    coroutineScope.launch {
-                        cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(loc, 20f))
-                    }
-                }
-            },
+        // Side Floating Controls: Drop At GPS & Center Camera
+        Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
-            backgroundColor = Color.White,
-            contentColor = Color(0xFF1E293B)
+                .padding(end = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(Icons.Default.MyLocation, contentDescription = "Center Location")
+            // Drop Marker directly at exact GPS coordinates
+            if (!isGuidingMode && centroid == null) {
+                FloatingActionButton(
+                    onClick = {
+                        userLocation?.let { loc ->
+                            corners.add(loc)
+                            editingEdgeIndex = null
+                            distanceInputText = ""
+                            Toast.makeText(context, "Added corner at exact GPS", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    backgroundColor = Saffron,
+                    contentColor = Color.White,
+                    modifier = Modifier.size(46.dp)
+                ) {
+                    Icon(Icons.Default.AddLocationAlt, contentDescription = "Drop GPS Corner", modifier = Modifier.size(22.dp))
+                }
+            }
+
+            // Recenter Camera
+            FloatingActionButton(
+                onClick = {
+                    userLocation?.let { loc ->
+                        coroutineScope.launch {
+                            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(loc, 20f))
+                        }
+                    }
+                },
+                backgroundColor = Color.White,
+                contentColor = Color(0xFF1E293B),
+                modifier = Modifier.size(46.dp)
+            ) {
+                Icon(Icons.Default.MyLocation, contentDescription = "Center Camera", modifier = Modifier.size(22.dp))
+            }
         }
 
         // Bottom Action Controls
@@ -722,6 +721,8 @@ actual fun MapScreen() {
                             val (center, area) = calculateCentroidAndArea(corners)
                             centroid = center
                             totalAreaSqFt = area
+                            editingEdgeIndex = null
+                            distanceInputText = ""
                             savePlotToStorage(context, corners, center, area)
                         }
                     },
@@ -771,7 +772,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Live Guidance Overlay (Points toward the Brahmasthan)
+        // Live Guidance Overlay (Points directly towards Brahmasthan)
         if (isGuidingMode) {
             val dotColor by animateColorAsState(if (isAtCenter) Color(0xFF16A34A) else Color(0xFFDC2626))
 
