@@ -255,6 +255,53 @@ fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
+/**
+ * Creates an inward-pointing reverse arrow needle badge.
+ * Points toward the bottom of the bitmap (i.e. toward the center when anchor is (0.5, 1.0)).
+ */
+fun createInwardPointerBadge(context: Context, text: String, colorHex: String): BitmapDescriptor {
+    val width = 80
+    val height = 110
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+
+    val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor(colorHex)
+        style = Paint.Style.FILL
+    }
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+    }
+
+    // Inward-pointing arrowhead (Tip is at center bottom: x = 40, y = 105)
+    val path = android.graphics.Path().apply {
+        moveTo(40f, 105f) // Tip pointing inward
+        lineTo(12f, 55f)
+        lineTo(28f, 55f)
+        lineTo(28f, 10f)
+        lineTo(52f, 10f)
+        lineTo(52f, 55f)
+        lineTo(68f, 55f)
+        close()
+    }
+
+    canvas.drawPath(path, arrowPaint)
+    canvas.drawPath(path, strokePaint)
+
+    // Text Label above the arrow
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 22f
+        isFakeBoldText = true
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText(text, 40f, 42f, textPaint)
+
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
 private const val PREFS_NAME = "vastu_map_prefs"
 private const val KEY_PLOT_DATA = "saved_plot_json"
 
@@ -437,7 +484,7 @@ actual fun MapScreen() {
 
     var isGuidingMode by remember { mutableStateOf(false) }
     var isVastuChakraMode by remember { mutableStateOf(false) }
-    var vastuRotationOffset by remember { mutableStateOf(0f) } // Calibration offset for True vs Magnetic North
+    var vastuRotationOffset by remember { mutableStateOf(0f) }
     var mapType by remember { mutableStateOf(MapType.HYBRID) }
     var distanceInputText by remember { mutableStateOf("") }
     var editingEdgeIndex by remember { mutableStateOf<Int?>(null) }
@@ -596,7 +643,7 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Draggable Corner Markers
+            // 1. Corner Markers
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
@@ -703,7 +750,7 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra 32 Sectors & Outer Labels (True North Aligned to 0 deg + Rotation Offset)
+            // 5. Vastu Chakra 32 Sectors & Outer Labels (30% fill opacity, all rotating with offset)
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
                 PADA_32_LIST.forEach { (padaName, startAngle) ->
@@ -725,7 +772,7 @@ actual fun MapScreen() {
 
                     Polygon(
                         points = wedgePoints,
-                        fillColor = zoneColor.copy(alpha = 0.50f),
+                        fillColor = zoneColor.copy(alpha = 0.30f), // 30% fill opacity
                         strokeColor = Color(0xFF1E293B).copy(alpha = 0.6f),
                         strokeWidth = 1.5f,
                         clickable = true,
@@ -752,9 +799,10 @@ actual fun MapScreen() {
                         }
                     )
 
-                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.12, midAngle.toDouble())
+                    // Pada labels dynamically rotate along with the Chakra
+                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.13, midAngle.toDouble())
                     Marker(
-                        state = rememberMarkerState(key = "chakra_lbl_$padaName", position = labelPos),
+                        state = rememberMarkerState(key = "chakra_lbl_${padaName}_${formatDec(vastuRotationOffset.toDouble(), 1)}", position = labelPos),
                         icon = createChakraLabelBadge(context, padaName),
                         anchor = Offset(0.5f, 0.5f),
                         flat = true,
@@ -762,6 +810,33 @@ actual fun MapScreen() {
                     )
                 }
 
+                // Dedicated Vastu Chakra North Pointer (Fixed to Chakra's rotated 0 deg True North)
+                val chakraNorthPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.25, vastuRotationOffset.toDouble())
+                Marker(
+                    state = rememberMarkerState(key = "chakra_north_ptr_${formatDec(vastuRotationOffset.toDouble(), 1)}", position = chakraNorthPos),
+                    icon = createInwardPointerBadge(context, "N", "#1E3A8A"), // Blue inward arrow for Chakra North
+                    anchor = Offset(0.5f, 1.0f),
+                    rotation = vastuRotationOffset + 180f,
+                    flat = true,
+                    zIndex = 5f,
+                    title = "Vastu Chakra 0° North"
+                )
+
+                // Reverse Pointer (Compass Magnetic North Needle): Inward-pointing red needle positioned just outside
+                // the Vastu Chakra rim along the real-time compass direction, facing the Brahmasthan center.
+                // When mobile faces True North, this red needle faces the blue Chakra North pointer tip-to-tip.
+                val compassOuterPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.38, deviceAzimuth.toDouble())
+                Marker(
+                    state = rememberMarkerState(key = "compass_mag_needle_${deviceAzimuth.toInt()}", position = compassOuterPos),
+                    icon = createInwardPointerBadge(context, "MAG", "#DC2626"), // Red inward arrow for Magnetic Compass
+                    anchor = Offset(0.5f, 1.0f),
+                    rotation = (deviceAzimuth + 180f) % 360f, // Rotated 180 deg so tip points inward to center
+                    flat = true,
+                    zIndex = 6f,
+                    title = "Magnetic North (${deviceAzimuth.toInt()}°)"
+                )
+
+                // Blue dot at exact center
                 Marker(
                     state = rememberMarkerState(key = "chakra_center_dot", position = center),
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
@@ -900,7 +975,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Vastu Chakra Rotation Calibration Slider Card (Appears above Box 1 when Vastu Chakra is active)
+        // Vastu Chakra Rotation Calibration Card with dedicated Reset button
         if (isVastuChakraMode && centroid != null) {
             Card(
                 modifier = Modifier
@@ -911,21 +986,31 @@ actual fun MapScreen() {
                 backgroundColor = Color.White,
                 elevation = 5.dp
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("North Calibration Offset", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color(0xFF1E293B))
-                        Text("${formatDec(vastuRotationOffset.toDouble(), 1)}°", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Saffron)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("North Offset: ", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color(0xFF1E293B))
+                            Text("${formatDec(vastuRotationOffset.toDouble(), 1)}°", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Saffron)
+                        }
+
+                        // Reset Offset Button
+                        IconButton(
+                            onClick = { vastuRotationOffset = 0f },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.RestartAlt, contentDescription = "Reset Offset", tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                        }
                     }
                     Slider(
                         value = vastuRotationOffset,
                         onValueChange = { vastuRotationOffset = it },
                         valueRange = -45f..45f,
                         steps = 89,
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.height(28.dp)
                     )
                 }
             }
@@ -1038,7 +1123,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Right-Side Floating Buttons & Live Compass Needle Widget
+        // Right-Side Floating Buttons
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -1046,42 +1131,6 @@ actual fun MapScreen() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.End
         ) {
-            // Live Floating Compass Rose Widget (Shows real-time mobile compass heading with Red North pointer)
-            Card(
-                modifier = Modifier.size(58.dp),
-                shape = CircleShape,
-                backgroundColor = Color.White.copy(alpha = 0.95f),
-                elevation = 4.dp
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .rotate(-deviceAzimuth),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.size(46.dp)) {
-                        val c = Offset(size.width / 2, size.height / 2)
-                        // North Red Arrow Pointer
-                        val pathNorth = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(c.x, c.y - 18.dp.toPx())
-                            lineTo(c.x - 5.dp.toPx(), c.y)
-                            lineTo(c.x + 5.dp.toPx(), c.y)
-                            close()
-                        }
-                        drawPath(pathNorth, color = Color(0xFFDC2626))
-
-                        // South Grey Arrow Pointer
-                        val pathSouth = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(c.x, c.y + 18.dp.toPx())
-                            lineTo(c.x - 5.dp.toPx(), c.y)
-                            lineTo(c.x + 5.dp.toPx(), c.y)
-                            close()
-                        }
-                        drawPath(pathSouth, color = Color(0xFF94A3B8))
-                    }
-                }
-            }
-
             if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
                 ExtendedFloatingActionButton(
                     text = { Text("Add Crosshair", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
@@ -1146,7 +1195,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Bottom Action Controls
+        // Bottom Action Controls (ReCalculate, Go to Center, VastuChakra)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1207,7 +1256,7 @@ actual fun MapScreen() {
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Text("Mark Center", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Go to Center", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
                     }
 
                     Button(
