@@ -3,6 +3,7 @@ package com.vastu.compass.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
@@ -11,6 +12,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.location.Location
 import android.os.Looper
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -19,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,9 +33,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
@@ -44,12 +49,15 @@ import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
 import com.vastu.compass.sensor.getCompassSensor
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import kotlin.math.*
 
-// Converts meters to feet
 const val METERS_TO_FEET = 3.28084
-// Converts sq. meters to sq. feet
+const val FEET_TO_METERS = 0.3048
 const val SQ_METERS_TO_SQ_FEET = 10.7639
+const val EARTH_RADIUS_METERS = 6371000.0
 
 fun calculateDistanceMeters(p1: LatLng, p2: LatLng): Float {
     val results = FloatArray(1)
@@ -68,8 +76,20 @@ fun calculateBearing(from: LatLng, to: LatLng): Float {
 }
 
 /**
- * High-accuracy planar projection centroid and polygon area calculation.
+ * Calculates a target destination LatLng given starting origin, distance in meters, and bearing.
  */
+fun pointAtDistanceAndBearing(origin: LatLng, distanceMeters: Double, bearingDegrees: Double): LatLng {
+    val distRatio = distanceMeters / EARTH_RADIUS_METERS
+    val brngRad = Math.toRadians(bearingDegrees)
+    val lat1Rad = Math.toRadians(origin.latitude)
+    val lon1Rad = Math.toRadians(origin.longitude)
+
+    val lat2Rad = asin(sin(lat1Rad) * cos(distRatio) + cos(lat1Rad) * sin(distRatio) * cos(brngRad))
+    val lon2Rad = lon1Rad + atan2(sin(brngRad) * sin(distRatio) * cos(lat1Rad), cos(distRatio) - sin(lat1Rad) * sin(lat2Rad))
+
+    return LatLng(Math.toDegrees(lat2Rad), Math.toDegrees(lon2Rad))
+}
+
 fun calculateCentroidAndArea(points: List<LatLng>): Pair<LatLng, Double> {
     if (points.isEmpty()) return Pair(LatLng(0.0, 0.0), 0.0)
     if (points.size < 3) {
@@ -122,14 +142,12 @@ fun calculateCentroidAndArea(points: List<LatLng>): Pair<LatLng, Double> {
     return Pair(LatLng(centroidLat, centroidLng), areaSqMeters * SQ_METERS_TO_SQ_FEET)
 }
 
-/**
- * Creates a clean text badge bitmap for displaying line lengths in feet.
- */
-fun createDistanceBadge(context: Context, text: String): BitmapDescriptor {
+fun createDistanceBadge(context: Context, text: String, isOpaque: Boolean): BitmapDescriptor {
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.BLACK
         textSize = 34f
         isFakeBoldText = true
+        alpha = if (isOpaque) 128 else 255
     }
     val bounds = Rect()
     paint.getTextBounds(text, 0, text.length, bounds)
@@ -145,11 +163,13 @@ fun createDistanceBadge(context: Context, text: String): BitmapDescriptor {
     val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.WHITE
         style = Paint.Style.FILL
+        alpha = if (isOpaque) 128 else 240
     }
     val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.DKGRAY
         style = Paint.Style.STROKE
         strokeWidth = 3f
+        alpha = if (isOpaque) 128 else 255
     }
 
     val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
@@ -161,6 +181,86 @@ fun createDistanceBadge(context: Context, text: String): BitmapDescriptor {
     canvas.drawText(text, textX, textY, paint)
 
     return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
+// Device Storage Helpers
+private const val PREFS_NAME = "vastu_map_prefs"
+private const val KEY_PLOT_DATA = "saved_plot_json"
+
+fun savePlotToStorage(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqFt: Double) {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val obj = JSONObject()
+    val arr = JSONArray()
+    points.forEach { pt ->
+        val p = JSONObject()
+        p.put("lat", pt.latitude)
+        p.put("lng", pt.longitude)
+        arr.put(p)
+    }
+    obj.put("points", arr)
+    centroid?.let {
+        obj.put("cLat", it.latitude)
+        obj.put("cLng", it.longitude)
+    }
+    obj.put("areaSqFt", areaSqFt)
+    prefs.edit().putString(KEY_PLOT_DATA, obj.toString()).apply()
+}
+
+fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqFt: Double) {
+    if (points.isEmpty()) return
+
+    val kmlCoordinates = StringBuilder()
+    points.forEach { pt ->
+        kmlCoordinates.append("%.9f,%.9f,0\n".format(pt.longitude, pt.latitude))
+    }
+    // Close polygon loop
+    kmlCoordinates.append("%.9f,%.9f,0\n".format(points[0].longitude, points[0].latitude))
+
+    val kmlContent = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Vastu Property Layout</name>
+            <description>Total Area: ${"%.2f".format(areaSqFt)} sq ft</description>
+            <Placemark>
+              <name>Property Boundary</name>
+              <Polygon>
+                <outerBoundaryIs>
+                  <LinearRing>
+                    <coordinates>
+                      $kmlCoordinates
+                    </coordinates>
+                  </LinearRing>
+                </outerBoundaryIs>
+              </Polygon>
+            </Placemark>
+            ${if (centroid != null) """
+            <Placemark>
+              <name>Brahmasthan (Centroid)</name>
+              <Point>
+                <coordinates>${"%.9f,%.9f,0".format(centroid.longitude, centroid.latitude)}</coordinates>
+              </Point>
+            </Placemark>
+            """ else ""}
+          </Document>
+        </kml>
+    """.trimIndent()
+
+    try {
+        val file = File(context.cacheDir, "vastu_property_${System.currentTimeMillis()}.kml")
+        file.writeText(kmlContent)
+
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.google-earth.kml+xml"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Vastu Property Boundary & Centroid Data")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Export KML"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
 }
 
 @SuppressLint("MissingPermission")
@@ -190,7 +290,6 @@ actual fun MapScreen() {
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    // Continuous Real-Time GPS Tracking
     DisposableEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@DisposableEffect onDispose {}
 
@@ -217,7 +316,38 @@ actual fun MapScreen() {
         position = CameraPosition.fromLatLngZoom(LatLng(28.6139, 77.2090), 19f)
     }
 
-    // Auto-focus camera on user location when first detected
+    val corners = remember { mutableStateListOf<LatLng>() }
+    var centroid by remember { mutableStateOf<LatLng?>(null) }
+    var totalAreaSqFt by remember { mutableStateOf(0.0) }
+    var isGuidingMode by remember { mutableStateOf(false) }
+    var mapType by remember { mutableStateOf(MapType.HYBRID) }
+
+    // Fixed length marker input
+    var lengthInputText by remember { mutableStateOf("") }
+    var fixedRadiusMeters by remember { mutableStateOf<Double?>(null) }
+
+    // Load saved plot on launch
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedData = prefs.getString(KEY_PLOT_DATA, null)
+        if (!savedData.isNullOrBlank()) {
+            try {
+                val obj = JSONObject(savedData)
+                val pts = obj.getJSONArray("points")
+                corners.clear()
+                for (i in 0 until pts.length()) {
+                    val p = pts.getJSONObject(i)
+                    corners.add(LatLng(p.getDouble("lat"), p.getDouble("lng")))
+                }
+                if (obj.has("cLat") && obj.has("cLng")) {
+                    centroid = LatLng(obj.getDouble("cLat"), obj.getDouble("cLng"))
+                }
+                totalAreaSqFt = obj.optDouble("areaSqFt", 0.0)
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Centering on initial GPS fix
     var hasCenteredFirstTime by remember { mutableStateOf(false) }
     LaunchedEffect(userLocation) {
         if (!hasCenteredFirstTime && userLocation != null) {
@@ -226,13 +356,7 @@ actual fun MapScreen() {
         }
     }
 
-    val corners = remember { mutableStateListOf<LatLng>() }
-    var centroid by remember { mutableStateOf<LatLng?>(null) }
-    var totalAreaSqFt by remember { mutableStateOf(0.0) }
-    var isGuidingMode by remember { mutableStateOf(false) }
-    var mapType by remember { mutableStateOf(MapType.HYBRID) }
-
-    // Live distance & target direction
+    // Direction arrow pointing strictly from User GPS -> Calculated Centroid
     val distanceToCentroid = remember(userLocation, centroid) {
         if (userLocation != null && centroid != null) calculateDistanceMeters(userLocation!!, centroid!!) else null
     }
@@ -244,7 +368,11 @@ actual fun MapScreen() {
     }
     val isAtCenter = (distanceToCentroid ?: 999f) <= 1.2f
 
-    // Marker labels: A, B, C, D, ...
+    val isCalculated = centroid != null
+    // 50% opacity factor when calculated
+    val lineAlpha = if (isCalculated) 0.5f else 1.0f
+    val markerAlpha = if (isCalculated) 0.5f else 1.0f
+
     fun getPointLabel(index: Int): String {
         return if (index < 26) ('A' + index).toString() else "P${index + 1}"
     }
@@ -260,7 +388,7 @@ actual fun MapScreen() {
                 minZoomPreference = 3f
             ),
             uiSettings = MapUiSettings(
-                myLocationButtonEnabled = false, // Handled via custom floating action button
+                myLocationButtonEnabled = false,
                 zoomControlsEnabled = false,
                 compassEnabled = true
             ),
@@ -270,13 +398,23 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Draggable Corner Markers
+            // 1. Draggable Markers (50% transparent when calculated)
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}_${point.latitude}_${point.longitude}", position = point)
-                
+
                 LaunchedEffect(markerState.position) {
                     if (markerState.position != corners[index]) {
-                        corners[index] = markerState.position
+                        // Apply fixed radius constraint if editing B relative to A
+                        if (index == 1 && fixedRadiusMeters != null && corners.isNotEmpty()) {
+                            val originA = corners[0]
+                            val currentBearing = calculateBearing(originA, markerState.position)
+                            val constrainedPos = pointAtDistanceAndBearing(originA, fixedRadiusMeters!!, currentBearing.toDouble())
+                            corners[1] = constrainedPos
+                            markerState.position = constrainedPos
+                        } else {
+                            corners[index] = markerState.position
+                        }
+
                         if (centroid != null) {
                             val (newCentroid, newArea) = calculateCentroidAndArea(corners)
                             centroid = newCentroid
@@ -287,26 +425,25 @@ actual fun MapScreen() {
 
                 Marker(
                     state = markerState,
-                    title = "Marker ${getPointLabel(index)} (Hold & drag to move)",
-                    draggable = !isGuidingMode
+                    title = "Marker ${getPointLabel(index)}",
+                    draggable = !isGuidingMode,
+                    alpha = markerAlpha
                 )
             }
 
-            // 2. Connecting Lines and Distance Badges in Feet
+            // 2. Lines & Midpoint Distance Badges (50% transparent when calculated)
             if (corners.size >= 2) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
                     val p1 = corners[i]
                     val p2 = corners[(i + 1) % corners.size]
 
-                    // Connecting Line
                     Polyline(
                         points = listOf(p1, p2),
-                        color = Color(0xFFFFD600),
+                        color = Color(0xFFFFD600).copy(alpha = lineAlpha),
                         width = 8f
                     )
 
-                    // Line midpoint badge showing feet
                     val midLat = (p1.latitude + p2.latitude) / 2.0
                     val midLng = (p1.longitude + p2.longitude) / 2.0
                     val distanceFeet = calculateDistanceMeters(p1, p2) * METERS_TO_FEET
@@ -314,24 +451,25 @@ actual fun MapScreen() {
 
                     Marker(
                         state = rememberMarkerState(key = "edge_${i}_$badgeText", position = LatLng(midLat, midLng)),
-                        icon = createDistanceBadge(context, badgeText),
+                        icon = createDistanceBadge(context, badgeText, isCalculated),
                         anchor = Offset(0.5f, 0.5f),
-                        flat = true
+                        flat = true,
+                        alpha = lineAlpha
                     )
                 }
             }
 
-            // 3. Shaded Yellow Property Polygon
+            // 3. Shaded Yellow Polygon
             if (corners.size >= 3) {
                 Polygon(
                     points = corners.toList(),
-                    fillColor = Color(0x55FFEB3B),
-                    strokeColor = Color(0xFFFFD600),
+                    fillColor = Color(0xFFFFEB3B).copy(alpha = if (isCalculated) 0.18f else 0.35f),
+                    strokeColor = Color(0xFFFFD600).copy(alpha = lineAlpha),
                     strokeWidth = 4f
                 )
             }
 
-            // 4. Centroid (Brahmasthan) Marker
+            // 4. Centroid Marker
             centroid?.let { centerPoint ->
                 Marker(
                     state = rememberMarkerState(key = "centroid", position = centerPoint),
@@ -341,7 +479,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Top Control Bar: Status, Area display, Reset
+        // Top Control Bar: Status, Area, Save, Export, Reset
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -366,7 +504,7 @@ actual fun MapScreen() {
                         )
                     } else {
                         Text(
-                            text = if (corners.isEmpty()) "Tap corners A, B, C on map" else "${corners.size} markers placed (Drag to adjust)",
+                            text = if (corners.isEmpty()) "Tap corners on map" else "${corners.size} points placed (Drag to adjust)",
                             fontSize = 11.5.sp,
                             color = Color.Gray
                         )
@@ -374,6 +512,23 @@ actual fun MapScreen() {
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Save Button
+                    if (centroid != null) {
+                        IconButton(onClick = {
+                            savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                            Toast.makeText(context, "Plot & Centroid saved to device", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.Save, contentDescription = "Save Plot", tint = VastuGreen)
+                        }
+
+                        // Export KML Button
+                        IconButton(onClick = {
+                            exportKml(context, corners, centroid, totalAreaSqFt)
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Export KML", tint = Saffron)
+                        }
+                    }
+
                     IconButton(onClick = {
                         mapType = if (mapType == MapType.HYBRID) MapType.NORMAL else MapType.HYBRID
                     }) {
@@ -390,15 +545,62 @@ actual fun MapScreen() {
                             centroid = null
                             totalAreaSqFt = 0.0
                             isGuidingMode = false
+                            fixedRadiusMeters = null
+                            savePlotToStorage(context, emptyList(), null, 0.0)
                         }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Restart Marking", tint = Color(0xFFDC2626))
+                            Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = Color(0xFFDC2626))
                         }
                     }
                 }
             }
         }
 
-        // Floating "My Location" Button (Right Side)
+        // Fixed Length Input Dialog (Shows when exactly 1 marker is placed)
+        if (corners.size == 1 && fixedRadiusMeters == null) {
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 90.dp, start = 20.dp, end = 20.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                backgroundColor = Color.White,
+                elevation = 6.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = lengthInputText,
+                        onValueChange = { lengthInputText = it },
+                        label = { Text("Dist to B (ft)", fontSize = 12.sp) },
+                        placeholder = { Text("e.g. 5.4") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).height(54.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val ft = lengthInputText.toDoubleOrNull()
+                            if (ft != null && ft > 0) {
+                                val meters = ft * FEET_TO_METERS
+                                fixedRadiusMeters = meters
+                                val ptB = pointAtDistanceAndBearing(corners[0], meters, 90.0)
+                                corners.add(ptB)
+                                lengthInputText = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Set B", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Floating "My Location" Button
         FloatingActionButton(
             onClick = {
                 userLocation?.let { loc ->
@@ -413,7 +615,7 @@ actual fun MapScreen() {
             backgroundColor = Color.White,
             contentColor = Color(0xFF1E293B)
         ) {
-            Icon(Icons.Default.MyLocation, contentDescription = "Center My Location")
+            Icon(Icons.Default.MyLocation, contentDescription = "Center Location")
         }
 
         // Bottom Action Controls
@@ -430,6 +632,8 @@ actual fun MapScreen() {
                             val (center, area) = calculateCentroidAndArea(corners)
                             centroid = center
                             totalAreaSqFt = area
+                            // Auto-save on calculate
+                            savePlotToStorage(context, corners, center, area)
                         }
                     },
                     enabled = corners.size >= 3,
@@ -440,7 +644,7 @@ actual fun MapScreen() {
                     Icon(Icons.Default.Adjust, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (corners.size >= 3) "FIND CENTER (CENTROID)" else "PLACE AT LEAST 3 CORNERS",
+                        text = if (corners.size >= 3) "CALCULATE CENTER" else "PLACE AT LEAST 3 CORNERS",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -478,7 +682,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Live Guidance Overlay
+        // Live Guidance Overlay (Points strictly toward the Brahmasthan)
         if (isGuidingMode) {
             val dotColor by animateColorAsState(if (isAtCenter) Color(0xFF16A34A) else Color(0xFFDC2626))
 
@@ -488,14 +692,12 @@ actual fun MapScreen() {
                     .background(Color.Black.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
-                // Crosshairs
                 Canvas(modifier = Modifier.size(180.dp)) {
                     val c = Offset(size.width / 2, size.height / 2)
                     drawLine(Color.White.copy(alpha = 0.5f), Offset(c.x, 0f), Offset(c.x, size.height), strokeWidth = 2.dp.toPx())
                     drawLine(Color.White.copy(alpha = 0.5f), Offset(0f, c.y), Offset(size.width, c.y), strokeWidth = 2.dp.toPx())
                 }
 
-                // Center Dot (Red -> Green)
                 Surface(
                     shape = CircleShape,
                     color = dotColor,
@@ -509,7 +711,7 @@ actual fun MapScreen() {
                     }
                 }
 
-                // Rotating Directional Arrow
+                // Rotating Arrow: Points strictly toward Centroid based on GPS & Compass
                 if (!isAtCenter) {
                     Box(
                         modifier = Modifier
@@ -526,7 +728,6 @@ actual fun MapScreen() {
                     }
                 }
 
-                // Guidance HUD
                 Card(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -554,7 +755,7 @@ actual fun MapScreen() {
                                 val distFeet = distanceToCentroid * METERS_TO_FEET
                                 "Distance: ${"%.1f".format(distanceToCentroid)} m (${"%.1f".format(distFeet)} ft)"
                             } else {
-                                "Acquiring high-precision GPS lock..."
+                                "Acquiring GPS fix..."
                             },
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
