@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
@@ -169,7 +170,7 @@ actual fun MapScreen() {
             properties = MapProperties(
                 mapType = mapType,
                 isMyLocationEnabled = hasLocationPermission,
-                maxZoomPreference = 22f, // Maximum zoom
+                maxZoomPreference = 22f,
                 minZoomPreference = 3f
             ),
             uiSettings = MapUiSettings(
@@ -195,8 +196,8 @@ actual fun MapScreen() {
             if (corners.size >= 3) {
                 Polygon(
                     points = corners.toList(),
-                    fillColor = Color(0x66FFEB3B), // Transparent Yellow
-                    strokeColor = Color(0xFFFFD600), // Solid Yellow outline
+                    fillColor = Color(0x66FFEB3B),
+                    strokeColor = Color(0xFFFFD600),
                     strokeWidth = 6f
                 )
             }
@@ -210,7 +211,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Top Control Bar: Satellite toggle, Clear, Point count
+        // Top Control Bar
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -264,7 +265,6 @@ actual fun MapScreen() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (centroid == null) {
-                // "Find Center" Button
                 Button(
                     onClick = {
                         if (corners.size >= 3) {
@@ -285,7 +285,6 @@ actual fun MapScreen() {
                     )
                 }
             } else if (!isGuidingMode) {
-                // Two Buttons: "ReCalculate" and "Mark Center"
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -319,7 +318,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Live Guidance Overlay (When "Mark Center" is active)
+        // Live Guidance Overlay
         if (isGuidingMode) {
             val dotColor by animateColorAsState(if (isAtCenter) Color(0xFF16A34A) else Color(0xFFDC2626))
 
@@ -329,14 +328,12 @@ actual fun MapScreen() {
                     .background(Color.Black.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
-                // Crosshairs
                 Canvas(modifier = Modifier.size(180.dp)) {
                     val c = Offset(size.width / 2, size.height / 2)
                     drawLine(Color.White.copy(alpha = 0.5f), Offset(c.x, 0f), Offset(c.x, size.height), strokeWidth = 2.dp.toPx())
                     drawLine(Color.White.copy(alpha = 0.5f), Offset(0f, c.y), Offset(size.width, c.y), strokeWidth = 2.dp.toPx())
                 }
 
-                // Dynamic Center Dot (Turns from Red to Green on exact match)
                 Surface(
                     shape = CircleShape,
                     color = dotColor,
@@ -350,7 +347,6 @@ actual fun MapScreen() {
                     }
                 }
 
-                // Directional Guidance Arrow (Points toward Centroid)
                 if (!isAtCenter) {
                     Box(
                         modifier = Modifier
@@ -367,7 +363,6 @@ actual fun MapScreen() {
                     }
                 }
 
-                // Bottom HUD with Distance, Status, and Exit button
                 Card(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
