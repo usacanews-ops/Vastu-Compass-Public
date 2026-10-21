@@ -25,7 +25,7 @@
         <!-- Replace YOUR_GOOGLE_MAPS_API_KEY with your Google Cloud Console Maps Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="YOUR_GOOGLE_MAPS_API_KEY" />
+            android:value="AIzaSyBH6RoSlVQGs8XfD-Tj7lpJet7yYJh1qAg" />
 
         <activity
             android:name="com.vastu.compass.MainActivity"
