@@ -50,7 +50,8 @@ data class ZoneEffect(
     val zoneId: String = "",
     val status: String = "Neutral",
     val note: String = "",
-    val remedy: String? = null
+    val remedy: String? = null,
+    val productId: String? = null
 )
 
 @Serializable
@@ -68,6 +69,7 @@ data class Problem(
     val remedy: String,
     val solution: String
 )
+
 @Serializable
 data class ProductPackage(
     val version: Int = 1,
