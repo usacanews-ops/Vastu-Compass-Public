@@ -11,8 +11,10 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -23,6 +25,8 @@ import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
 import com.vastu.compass.util.ShareHelper
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 import kotlinx.coroutines.launch
 
 @Composable
@@ -150,7 +154,7 @@ fun MoreScreen() {
             }
         }
 
-        // 3. Products Section
+        // 3. Products Section (with Image Rendering)
         if (products.isNotEmpty()) {
             Spacer(modifier = Modifier.height(24.dp))
             Row(
@@ -172,76 +176,110 @@ fun MoreScreen() {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 5.dp),
+                        .padding(vertical = 6.dp),
                     shape = RoundedCornerShape(14.dp),
                     backgroundColor = Color.White,
                     elevation = 2.dp
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = product.title,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (product.price.isNotBlank()) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFECFDF5)
-                                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Product Image with Kamel
+                        if (product.imageUrl.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFF8FAFC)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                KamelImage(
+                                    resource = asyncPainterResource(data = product.imageUrl),
+                                    contentDescription = product.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit,
+                                    onLoading = {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Saffron,
+                                            strokeWidth = 2.dp
+                                        )
+                                    },
+                                    onFailure = {
+                                        Icon(
+                                            Icons.Default.ShoppingBag,
+                                            contentDescription = null,
+                                            tint = Color(0xFFCBD5E1),
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+
+                        // Product Details
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = product.title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.5.sp,
+                                    color = Color(0xFF1E293B),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (product.price.isNotBlank()) {
                                     Text(
                                         text = product.price,
                                         fontWeight = FontWeight.Black,
-                                        fontSize = 13.sp,
-                                        color = VastuGreen,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        fontSize = 13.5.sp,
+                                        color = VastuGreen
                                     )
                                 }
                             }
-                        }
 
-                        if (product.category.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = product.category.uppercase(),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Saffron
-                            )
-                        }
+                            if (product.category.isNotBlank()) {
+                                Text(
+                                    text = product.category.uppercase(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Saffron
+                                )
+                            }
 
-                        if (product.description.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = product.description,
-                                fontSize = 12.5.sp,
-                                color = Color(0xFF64748B),
-                                lineHeight = 17.sp
-                            )
-                        }
+                            if (product.description.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = product.description,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B),
+                                    maxLines = 2
+                                )
+                            }
 
-                        if (product.buyUrl.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                onClick = {
-                                    try { uriHandler.openUri(product.buyUrl) } catch (_: Exception) {}
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    backgroundColor = VastuGreen,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("View Remedy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            if (product.buyUrl.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        try { uriHandler.openUri(product.buyUrl) } catch (_: Exception) {}
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        backgroundColor = VastuGreen,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(30.dp)
+                                ) {
+                                    Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Buy Remedy", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
