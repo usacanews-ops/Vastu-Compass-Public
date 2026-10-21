@@ -56,12 +56,21 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 import kotlin.math.*
 
 const val METERS_TO_FEET = 3.28084
 const val FEET_TO_METERS = 0.3048
 const val SQ_METERS_TO_SQ_FEET = 10.7639
 const val EARTH_RADIUS_METERS = 6378137.0 // WGS84 exact equatorial radius
+
+fun formatDec(value: Double, digits: Int = 1): String {
+    return String.format(Locale.US, "%.${digits}f", value)
+}
+
+fun formatArea(value: Double): String {
+    return String.format(Locale.US, "%,.1f", value)
+}
 
 fun calculateDistanceMeters(p1: LatLng, p2: LatLng): Float {
     val results = FloatArray(1)
@@ -240,7 +249,6 @@ fun savePlotToStorage(context: Context, points: List<LatLng>, centroid: LatLng?,
         }
         val safeArea = if (areaSqFt.isNaN() || areaSqFt.isInfinite()) 0.0 else areaSqFt
         obj.put("areaSqFt", safeArea)
-        // Synchronous commit ensures data is immediately written to disk even if app closes right away
         prefs.edit().putString(KEY_PLOT_DATA, obj.toString()).commit()
     } catch (e: Exception) {
         e.printStackTrace()
@@ -279,16 +287,27 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
 
     val kmlCoordinates = StringBuilder()
     points.forEach { pt ->
-        kmlCoordinates.append("%.9f,%.9f,0\n".format(pt.longitude, pt.latitude))
+        kmlCoordinates.append("${formatDec(pt.longitude, 9)},${formatDec(pt.latitude, 9)},0\n")
     }
-    kmlCoordinates.append("%.9f,%.9f,0\n".format(points[0].longitude, points[0].latitude))
+    kmlCoordinates.append("${formatDec(points[0].longitude, 9)},${formatDec(points[0].latitude, 9)},0\n")
+
+    val centroidPlacemark = if (centroid != null) {
+        """
+            <Placemark>
+              <name>Brahmasthan (Centroid)</name>
+              <Point>
+                <coordinates>${formatDec(centroid.longitude, 9)},${formatDec(centroid.latitude, 9)},0</coordinates>
+              </Point>
+            </Placemark>
+        """.trimIndent()
+    } else ""
 
     val kmlContent = """
         <?xml version="1.0" encoding="UTF-8"?>
         <kml xmlns="http://www.opengis.net/kml/2.2">
           <Document>
             <name>Vastu Property Layout</name>
-            <description>Total Area: ${"%.2f".format(areaSqFt)} sq ft</description>
+            <description>Total Area: ${formatDec(areaSqFt, 2)} sq ft</description>
             <Placemark>
               <name>Property Boundary</name>
               <Polygon>
@@ -301,14 +320,7 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
                 </outerBoundaryIs>
               </Polygon>
             </Placemark>
-            ${if (centroid != null) """
-            <Placemark>
-              <name>Brahmasthan (Centroid)</name>
-              <Point>
-                <coordinates>${"%.9f,%.9f,0".format(centroid.longitude, centroid.latitude)}</coordinates>
-              </Point>
-            </Placemark>
-            """ else ""}
+            $centroidPlacemark
           </Document>
         </kml>
     """.trimIndent()
@@ -564,7 +576,7 @@ actual fun MapScreen() {
                             if (!isGuidingMode && centroid == null) {
                                 val dFeet = calculateDistanceMeters(p1, p2) * METERS_TO_FEET
                                 editingEdgeIndex = i
-                                distanceInputText = "%.1f".format(dFeet)
+                                distanceInputText = formatDec(dFeet, 1)
                             }
                         }
                     )
@@ -572,7 +584,7 @@ actual fun MapScreen() {
                     val midLat = (p1.latitude + p2.latitude) / 2.0
                     val midLng = (p1.longitude + p2.longitude) / 2.0
                     val distanceFeet = calculateDistanceMeters(p1, p2) * METERS_TO_FEET
-                    val badgeText = "${"%.1f".format(distanceFeet)} ft"
+                    val badgeText = "${formatDec(distanceFeet, 1)} ft"
                     val isThisEdgeSelected = editingEdgeIndex == i
 
                     val badgeState = rememberMarkerState(
@@ -592,7 +604,7 @@ actual fun MapScreen() {
                         onClick = {
                             if (!isGuidingMode && centroid == null) {
                                 editingEdgeIndex = i
-                                distanceInputText = "%.1f".format(distanceFeet)
+                                distanceInputText = formatDec(distanceFeet, 1)
                             }
                             true
                         }
@@ -657,13 +669,13 @@ actual fun MapScreen() {
                     Text("MARK MAP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color(0xFF1E293B))
                     if (centroid != null) {
                         Text(
-                            text = "${"%,.1f".format(totalAreaSqFt)} sq. ft.",
+                            text = "${formatArea(totalAreaSqFt)} sq. ft.",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = VastuGreen
                         )
                     } else {
-                        val accText = gpsAccuracyFeet?.let { "±${"%.0f".format(it)}ft" } ?: "GPS..."
+                        val accText = gpsAccuracyFeet?.let { "±${formatDec(it.toDouble(), 0)}ft" } ?: "GPS..."
                         Text(
                             text = if (corners.isEmpty()) "Tap map ($accText)" else "${corners.size} pts ($accText)",
                             fontSize = 10.5.sp,
@@ -1063,10 +1075,10 @@ actual fun MapScreen() {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (isAtCenter) {
-                                "You are at the Brahmasthan (${"%,.1f".format(totalAreaSqFt)} sq. ft.)"
+                                "You are at the Brahmasthan (${formatArea(totalAreaSqFt)} sq. ft.)"
                             } else if (distanceToCentroid != null) {
                                 val distFeet = distanceToCentroid * METERS_TO_FEET
-                                "Distance: ${"\%.1f".format(distFeet)} ft (${"%.2f".format(distanceToCentroid)} m)"
+                                "Distance: ${formatDec(distFeet, 1)} ft (${formatDec(distanceToCentroid.toDouble(), 2)} m)"
                             } else {
                                 "Acquiring Precise GPS..."
                             },
