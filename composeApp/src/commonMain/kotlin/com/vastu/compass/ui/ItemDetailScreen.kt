@@ -421,11 +421,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                                             Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(15.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = if (linkedProduct.price.isNotBlank()) {
-                                                    "Buy ${linkedProduct.title} (${linkedProduct.price})"
-                                                } else {
-                                                    "Buy ${linkedProduct.title}"
-                                                },
+                                                text = "View ${linkedProduct.title}",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.ExtraBold
                                             )
