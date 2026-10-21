@@ -32,18 +32,27 @@ import com.vastu.compass.BeigeBackground
 import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
 import com.vastu.compass.data.VastuRepository
-import com.vastu.compass.model.VastuZone
 import com.vastu.compass.model.ZoneEffect
 import com.vastu.compass.sensor.getCompassSensor
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val PADA_LIST = listOf(
+// Organized for Logical UI Listing
+private val PADA_UI_LIST = listOf(
     "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8",
     "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
     "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8",
     "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"
+)
+
+// Mathematical Order starting exactly at 0.0 degrees (True North)
+private val PADA_MATH_ORDER = listOf(
+    "N4", "N5", "N6", "N7", "N8",
+    "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
+    "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8",
+    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8",
+    "N1", "N2", "N3"
 )
 
 private val ZONE_ORDER = listOf(
@@ -60,9 +69,8 @@ private val ZONE_NAMES = mapOf(
 
 fun calculatePada(degrees: Float): String {
     val norm = (degrees % 360f + 360f) % 360f
-    val offset = (norm - 315f + 360f) % 360f
-    val index = (offset / 11.25f).toInt().coerceIn(0, 31)
-    return PADA_LIST[index]
+    val index = (norm / 11.25f).toInt().coerceIn(0, 31)
+    return PADA_MATH_ORDER[index]
 }
 
 fun calculateZoneId(degrees: Float): String {
@@ -83,33 +91,25 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
     val uriHandler = LocalUriHandler.current
 
     val item = pkg?.items?.firstOrNull { it.id == itemId }
+    val isPadaSpecific = item?.isPadaSpecific == true
 
-    val currentPada = remember(rawDegrees) { calculatePada(rawDegrees) }
+    val currentPadaId = remember(rawDegrees) { calculatePada(rawDegrees) }
     val currentZoneId = remember(rawDegrees) { calculateZoneId(rawDegrees) }
+    val currentFacingId = if (isPadaSpecific) currentPadaId else currentZoneId
 
-    val currentZone = remember(currentZoneId, pkg) {
-        pkg?.zones?.firstOrNull { it.id.equals(currentZoneId, ignoreCase = true) }
-            ?: VastuZone(
-                id = currentZoneId,
-                name = ZONE_NAMES[currentZoneId] ?: currentZoneId,
-                element = "Vastu",
-                startDeg = 0f,
-                endDeg = 0f,
-                attributes = "",
-                pada = currentPada,
-                effects = "",
-                remedies = ""
-            )
+    var manualSelectedId by remember { mutableStateOf<String?>(null) }
+    val activeId = manualSelectedId ?: currentFacingId
+
+    // Retrieve full data package context for the active selection
+    val activeZoneData = pkg?.zones?.firstOrNull { it.id.equals(if (isPadaSpecific) currentZoneId else activeId, ignoreCase = true) }
+    val activePadaData = if (isPadaSpecific) pkg?.padas?.firstOrNull { it.id.equals(activeId, ignoreCase = true) } else null
+
+    // Determine specific effect based on Item configuration
+    val activeEffect: ZoneEffect? = if (isPadaSpecific) {
+        item?.padaEffects?.get(activeId) ?: item?.padaEffects?.entries?.firstOrNull { it.key.equals(activeId, ignoreCase = true) }?.value
+    } else {
+        item?.zoneEffects?.get(activeId) ?: item?.zoneEffects?.entries?.firstOrNull { it.key.equals(activeId, ignoreCase = true) }?.value
     }
-
-    var manualSelectedZoneId by remember { mutableStateOf<String?>(null) }
-    val activeZoneId = manualSelectedZoneId ?: currentZoneId
-    val activeZone = remember(activeZoneId, pkg) {
-        pkg?.zones?.firstOrNull { it.id.equals(activeZoneId, ignoreCase = true) } ?: currentZone
-    }
-
-    val activeEffect: ZoneEffect? = item?.zoneEffects?.get(activeZoneId)
-        ?: item?.zoneEffects?.entries?.firstOrNull { it.key.equals(activeZoneId, ignoreCase = true) }?.value
 
     Column(
         modifier = Modifier
@@ -117,6 +117,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
             .background(BeigeBackground)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
+        // --- Top Bar ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -153,6 +154,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 72.dp)
         ) {
+            // --- Live Compass Card ---
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -173,7 +175,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${ZONE_NAMES[currentZoneId] ?: currentZoneId} (${currentZoneId} · ${currentPada})",
+                            text = "${ZONE_NAMES[currentZoneId] ?: currentZoneId} (${currentZoneId} · ${currentPadaId})",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = VastuGreen
@@ -271,7 +273,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                                         color = VastuGreen
                                     )
                                     Text(
-                                        text = currentPada,
+                                        text = currentPadaId,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Saffron
@@ -280,8 +282,8 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                             }
                         }
 
-                        if (manualSelectedZoneId != null && manualSelectedZoneId != currentZoneId) {
-                            TextButton(onClick = { manualSelectedZoneId = null }) {
+                        if (manualSelectedId != null && manualSelectedId != currentFacingId) {
+                            TextButton(onClick = { manualSelectedId = null }) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, tint = Saffron, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Reset to Live Sensor", color = Saffron, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -291,6 +293,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 }
             }
 
+            // --- Effects & Remedy Card ---
             item {
                 val statusText = activeEffect?.status ?: "Neutral"
                 val (badgeBg, badgeTextColor, statusIcon) = when {
@@ -316,16 +319,16 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                         ) {
                             Column {
                                 Text(
-                                    text = "${ZONE_NAMES[activeZoneId] ?: activeZoneId} (${activeZoneId})",
+                                    text = if (isPadaSpecific) "PADA $activeId" else "${ZONE_NAMES[activeId] ?: activeId} ($activeId)",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF0F172A)
                                 )
                                 Text(
-                                    text = if (activeZoneId == currentZoneId) "CURRENT FACING · PADA ${currentPada}" else "SELECTED ZONE",
+                                    text = if (activeId == currentFacingId) "CURRENT FACING" else "SELECTED AREA",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (activeZoneId == currentZoneId) Saffron else Color(0xFF64748B)
+                                    color = if (activeId == currentFacingId) Saffron else Color(0xFF64748B)
                                 )
                             }
                             Surface(
@@ -350,22 +353,34 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
 
                         Divider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF1F5F9))
 
+                        // Dynamic Specifics (Macro Zone vs Entrance Pada)
+                        if (isPadaSpecific && activePadaData != null) {
+                            Text(text = "Deity: ${activePadaData.deity}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Saffron)
+                            Spacer(modifier = Modifier.height(2.dp))
+                        }
+
                         Text(
-                            text = "Vastu Effects in this Zone",
+                            text = if (isPadaSpecific) "Entrance Door Effect" else "Vastu Effects in this Zone",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF334155)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        
+                        val effectString = activeEffect?.note?.ifBlank { null }
+                            ?: if (isPadaSpecific) activePadaData?.entranceEffect else activeZoneData?.effects
+                            ?: "No specific effect recorded for this area."
+                            
                         Text(
-                            text = activeEffect?.note?.ifBlank { null }
-                                ?: activeZone.effects.ifBlank { "No severe negative effects recorded for this zone." },
+                            text = effectString,
                             fontSize = 14.sp,
                             color = Color(0xFF475569),
                             lineHeight = 20.sp
                         )
 
-                        val remedy = activeEffect?.remedy?.ifBlank { null } ?: activeZone.remedies.ifBlank { null }
+                        val remedy = activeEffect?.remedy?.ifBlank { null } 
+                            ?: if (isPadaSpecific) activePadaData?.entranceRemedy?.ifBlank { null } else activeZoneData?.remedies?.ifBlank { null }
+                            
                         if (remedy != null) {
                             val linkedProduct = activeEffect?.productId?.let { pid ->
                                 products.firstOrNull { it.id.equals(pid, ignoreCase = true) }
@@ -457,9 +472,10 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 }
             }
 
+            // --- List of All Placements (Zones or Padas) ---
             item {
                 Text(
-                    text = "ALL 16 ZONES COMPATIBILITY",
+                    text = if (isPadaSpecific) "ALL 32 PADAS COMPATIBILITY" else "ALL 16 ZONES COMPATIBILITY",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFF3E2723),
@@ -467,11 +483,18 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                 )
             }
 
-            items(ZONE_ORDER) { zoneKey ->
-                val isFacing = zoneKey == currentZoneId
-                val isSelected = zoneKey == activeZoneId
-                val effect = item?.zoneEffects?.get(zoneKey)
-                    ?: item?.zoneEffects?.entries?.firstOrNull { it.key.equals(zoneKey, ignoreCase = true) }?.value
+            val listToIterate = if (isPadaSpecific) PADA_UI_LIST else ZONE_ORDER
+
+            items(listToIterate) { listKey ->
+                val isFacing = listKey == currentFacingId
+                val isSelected = listKey == activeId
+                
+                val effect = if (isPadaSpecific) {
+                    item?.padaEffects?.get(listKey) ?: item?.padaEffects?.entries?.firstOrNull { it.key.equals(listKey, ignoreCase = true) }?.value
+                } else {
+                    item?.zoneEffects?.get(listKey) ?: item?.zoneEffects?.entries?.firstOrNull { it.key.equals(listKey, ignoreCase = true) }?.value
+                }
+                
                 val status = effect?.status ?: "Neutral"
 
                 val (pillBg, pillTextColor) = when {
@@ -499,7 +522,7 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                             color = borderColor,
                             shape = RoundedCornerShape(12.dp)
                         )
-                        .clickable { manualSelectedZoneId = zoneKey },
+                        .clickable { manualSelectedId = listKey },
                     shape = RoundedCornerShape(12.dp),
                     backgroundColor = Color.White,
                     elevation = if (isSelected) 3.dp else 1.dp
@@ -511,22 +534,27 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = zoneKey,
+                                text = listKey,
                                 fontWeight = FontWeight.Black,
                                 fontSize = 15.sp,
                                 color = if (isFacing) Saffron else Color(0xFF1E293B),
                                 modifier = Modifier.width(46.dp)
                             )
                             Column {
+                                val subtitle = if (isPadaSpecific) {
+                                    pkg?.padas?.firstOrNull { it.id == listKey }?.deity ?: "Pada"
+                                } else {
+                                    ZONE_NAMES[listKey] ?: listKey
+                                }
                                 Text(
-                                    text = ZONE_NAMES[zoneKey] ?: zoneKey,
+                                    text = subtitle,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF334155)
                                 )
                                 if (isFacing) {
                                     Text(
-                                        text = "FACING NOW (${currentPada})",
+                                        text = "FACING NOW",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Saffron
