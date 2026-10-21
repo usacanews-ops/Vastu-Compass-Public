@@ -68,3 +68,19 @@ data class Problem(
     val remedy: String,
     val solution: String
 )
+@Serializable
+data class ProductPackage(
+    val version: Int = 1,
+    val products: List<VastuProduct> = emptyList()
+)
+
+@Serializable
+data class VastuProduct(
+    val id: String,
+    val title: String,
+    val description: String = "",
+    val price: String = "",
+    val imageUrl: String = "",
+    val buyUrl: String = "",
+    val category: String = ""
+)
