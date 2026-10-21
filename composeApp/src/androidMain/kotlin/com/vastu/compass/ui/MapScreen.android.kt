@@ -22,9 +22,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -51,6 +53,8 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.vastu.compass.Saffron
 import com.vastu.compass.VastuGreen
+import com.vastu.compass.data.VastuRepository
+import com.vastu.compass.model.VastuZone
 import com.vastu.compass.sensor.getCompassSensor
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -169,11 +173,8 @@ fun calculateCentroidAndArea(points: List<LatLng>): Pair<LatLng, Double> {
     return Pair(LatLng(centroidLat, centroidLng), areaSqMeters * SQ_METERS_TO_SQ_FEET)
 }
 
-/**
- * Large, easily clickable distance badge with 70% visibility (179 alpha) when calculated.
- */
 fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, isSelected: Boolean): BitmapDescriptor {
-    val alphaInt = if (isCalculated) 179 else 255 // 70% visible = 179/255
+    val alphaInt = if (isCalculated) 179 else 255
 
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = if (isSelected) android.graphics.Color.WHITE else android.graphics.Color.BLACK
@@ -215,7 +216,48 @@ fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, i
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-// Persistent Storage Helpers (Uses applicationContext & synchronous commit)
+/**
+ * Generates a clean text badge for the 32 Vastu Chakra sector labels placed just outside the outer edge.
+ */
+fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#0F172A")
+        textSize = 28f
+        isFakeBoldText = true
+    }
+    val bounds = Rect()
+    paint.getTextBounds(text, 0, text.length, bounds)
+
+    val paddingH = 14
+    val paddingV = 8
+    val width = bounds.width() + paddingH * 2
+    val height = bounds.height() + paddingV * 2
+
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#F8FAFC")
+        style = Paint.Style.FILL
+        alpha = 230
+    }
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#CBD5E1")
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
+    val rect = RectF(1f, 1f, width.toFloat() - 1f, height.toFloat() - 1f)
+    canvas.drawRoundRect(rect, 10f, 10f, bgPaint)
+    canvas.drawRoundRect(rect, 10f, 10f, strokePaint)
+
+    val textX = (width - bounds.width()) / 2f - bounds.left
+    val textY = (height + bounds.height()) / 2f - bounds.bottom
+    canvas.drawText(text, textX, textY, paint)
+
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
 private const val PREFS_NAME = "vastu_map_prefs"
 private const val KEY_PLOT_DATA = "saved_plot_json"
 
@@ -342,6 +384,28 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
     }
 }
 
+// 32 Vastu Pada Definitions and Color mapping
+private val PADA_32_LIST = listOf(
+    Pair("N1", 348.75f), Pair("N2", 360.0f), Pair("N3", 11.25f), Pair("N4", 22.5f),
+    Pair("N5", 33.75f), Pair("N6", 45.0f), Pair("N7", 56.25f), Pair("N8", 67.5f),
+    Pair("E1", 78.75f), Pair("E2", 90.0f), Pair("E3", 101.25f), Pair("E4", 112.5f),
+    Pair("E5", 123.75f), Pair("E6", 135.0f), Pair("E7", 146.25f), Pair("E8", 157.5f),
+    Pair("S1", 168.75f), Pair("S2", 180.0f), Pair("S3", 191.25f), Pair("S4", 202.5f),
+    Pair("S5", 213.75f), Pair("S6", 225.0f), Pair("S7", 236.25f), Pair("S8", 247.5f),
+    Pair("W1", 258.75f), Pair("W2", 270.0f), Pair("W3", 281.25f), Pair("W4", 292.5f),
+    Pair("W5", 303.75f), Pair("W6", 315.0f), Pair("W7", 326.25f), Pair("W8", 337.5f)
+)
+
+fun getVastuColorForPada(padaId: String): Color {
+    return when {
+        padaId.startsWith("N") -> Color(0xFF64B5F6) // Water / Blue
+        padaId.startsWith("E") -> Color(0xFF81C784) // Wood / Green
+        padaId.startsWith("S") -> Color(0xFFE57373) // Fire / Red
+        padaId.startsWith("W") -> Color(0xFFFFF176) // Space / Yellow
+        else -> Color(0xFFBDBDBD)
+    }
+}
+
 @SuppressLint("MissingPermission")
 @Composable
 actual fun MapScreen() {
@@ -350,7 +414,8 @@ actual fun MapScreen() {
     val compassSensor = remember { getCompassSensor() }
     val deviceAzimuth by compassSensor.azimuthDegrees.collectAsState(initial = 0f)
 
-    // Load saved plot SYNCHRONOUSLY before first frame renders
+    val vastuPkg by VastuRepository.dataFlow.collectAsState()
+
     val initialSavedPlot = remember { loadPlotFromStorage(context) }
 
     val corners = remember {
@@ -368,7 +433,6 @@ actual fun MapScreen() {
         position = CameraPosition.fromLatLngZoom(startTarget, 20f)
     }
 
-    // Undo History Stack
     val undoStack = remember { mutableStateListOf<List<LatLng>>() }
     fun recordStateForUndo() {
         undoStack.add(corners.toList())
@@ -376,11 +440,14 @@ actual fun MapScreen() {
     }
 
     var isGuidingMode by remember { mutableStateOf(false) }
+    var isVastuChakraMode by remember { mutableStateOf(false) }
     var mapType by remember { mutableStateOf(MapType.HYBRID) }
     var distanceInputText by remember { mutableStateOf("") }
     var editingEdgeIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Check specifically for FINE (Precise) location permission
+    // Selected Vastu Zone for Dialog Modal
+    var selectedVastuZone by remember { mutableStateOf<VastuZone?>(null) }
+
     var hasFineLocationPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -472,7 +539,6 @@ actual fun MapScreen() {
         }
     }
 
-    // Only auto-center on live GPS if there was NO saved plot loaded
     var hasCenteredFirstTime by remember { mutableStateOf(initialSavedPlot != null) }
     LaunchedEffect(userLocation) {
         if (!hasCenteredFirstTime && userLocation != null && corners.isEmpty()) {
@@ -481,7 +547,6 @@ actual fun MapScreen() {
         }
     }
 
-    // Exact Geodesic Bearing from User Location -> Calculated Centroid
     val distanceToCentroid = remember(userLocation, centroid) {
         if (userLocation != null && centroid != null) calculateDistanceMeters(userLocation!!, centroid!!) else null
     }
@@ -494,12 +559,20 @@ actual fun MapScreen() {
     val isAtCenter = (distanceToCentroid ?: 999f) <= 1.0f
 
     val isCalculated = centroid != null
-    // 70% visible (30% transparent) when calculated
-    val lineAlpha = if (isCalculated) 0.7f else 1.0f
-    val markerAlpha = if (isCalculated) 0.7f else 1.0f
+    val lineAlpha = if (isCalculated && !isVastuChakraMode) 0.7f else 1.0f
+    val markerAlpha = if (isCalculated && !isVastuChakraMode) 0.7f else 1.0f
 
     fun getPointLabel(index: Int): String {
         return if (index < 26) ('A' + index).toString() else "P${index + 1}"
+    }
+
+    // Maximum distance from centroid to any corner marker (Radius for Vastu Chakra)
+    val chakraRadiusMeters = remember(centroid, corners) {
+        if (centroid != null && corners.isNotEmpty()) {
+            corners.maxOf { calculateDistanceMeters(centroid!!, it).toDouble() }.coerceAtLeast(5.0)
+        } else {
+            15.0
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -519,7 +592,7 @@ actual fun MapScreen() {
                 tiltGesturesEnabled = false
             ),
             onMapClick = { latLng ->
-                if (!isGuidingMode && centroid == null) {
+                if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
                     recordStateForUndo()
                     corners.add(latLng)
                     editingEdgeIndex = null
@@ -528,7 +601,7 @@ actual fun MapScreen() {
                 }
             }
         ) {
-            // 1. Draggable Corner Markers
+            // 1. Draggable Corner Markers (100% visible red points when VastuChakra is active)
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
@@ -554,14 +627,14 @@ actual fun MapScreen() {
 
                 Marker(
                     state = markerState,
-                    title = "Corner ${getPointLabel(index)} (Hold & drag)",
-                    draggable = !isGuidingMode,
-                    alpha = markerAlpha
+                    title = "Corner ${getPointLabel(index)}",
+                    draggable = !isGuidingMode && !isVastuChakraMode,
+                    alpha = if (isVastuChakraMode) 1.0f else markerAlpha
                 )
             }
 
-            // 2. Connecting Lines & Large Clickable Length Badges
-            if (corners.size >= 2) {
+            // 2. Connecting Lines & Distance Badges (Hidden when VastuChakra is active)
+            if (corners.size >= 2 && !isVastuChakraMode) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
                     val p1 = corners[i]
@@ -612,30 +685,103 @@ actual fun MapScreen() {
                 }
             }
 
-            // 3. Enclosed Property Polygon (70% visible border when calculated)
+            // 3. Property Polygon
             if (corners.size >= 3) {
                 Polygon(
                     points = corners.toList(),
-                    fillColor = Color(0xFFFFEB3B).copy(alpha = if (isCalculated) 0.25f else 0.38f),
+                    fillColor = Color(0xFFFFEB3B).copy(alpha = if (isCalculated && !isVastuChakraMode) 0.25f else 0.38f),
                     strokeColor = Color(0xFFFFD600).copy(alpha = lineAlpha),
                     strokeWidth = 5f
                 )
             }
 
-            // 4. Calculated Centroid (Brahmasthan) Marker
+            // 4. Centroid: Azure marker normally, or hidden during VastuChakra mode
             centroid?.let { centerPoint ->
-                val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
+                if (!isVastuChakraMode) {
+                    val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
+                    Marker(
+                        state = centroidState,
+                        title = "Brahmasthan (Center)",
+                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
+                        zIndex = 3f
+                    )
+                }
+            }
+
+            // 5. Vastu Chakra 32 Sectors & Outer Labels (True North Aligned to 0 deg)
+            if (isVastuChakraMode && centroid != null) {
+                val center = centroid!!
+                PADA_32_LIST.forEach { (padaName, startAngle) ->
+                    val sweepAngle = 11.25f
+                    val endAngle = startAngle + sweepAngle
+                    val midAngle = startAngle + (sweepAngle / 2f)
+
+                    // Build polygon wedge for sector (True North 0 deg aligned)
+                    val wedgePoints = mutableListOf<LatLng>().apply {
+                        add(center)
+                        // 15 angular interpolation steps along arc for smooth curvature on spherical earth
+                        for (step in 0..15) {
+                            val ang = startAngle + (sweepAngle * step / 15f)
+                            add(pointAtDistanceAndBearing(center, chakraRadiusMeters, ang.toDouble()))
+                        }
+                        add(center)
+                    }
+
+                    val zoneColor = getVastuColorForPada(padaName)
+
+                    Polygon(
+                        points = wedgePoints,
+                        fillColor = zoneColor.copy(alpha = 0.50f), // 50% fill
+                        strokeColor = Color(0xFF1E293B).copy(alpha = 0.6f),
+                        strokeWidth = 1.5f,
+                        clickable = true,
+                        onClick = {
+                            // Find matching zone in vastuPkg
+                            val baseZoneKey = when {
+                                padaName.startsWith("N") -> "N"
+                                padaName.startsWith("E") -> "E"
+                                padaName.startsWith("S") -> "S"
+                                padaName.startsWith("W") -> "W"
+                                else -> "N"
+                            }
+                            selectedVastuZone = vastuPkg?.zones?.firstOrNull { it.id.equals(baseZoneKey, ignoreCase = true) }
+                                ?: VastuZone(
+                                    id = baseZoneKey,
+                                    name = baseZoneKey,
+                                    element = "Vastu",
+                                    startDeg = startAngle,
+                                    endDeg = endAngle,
+                                    attributes = "Vastu Chakra sector $padaName",
+                                    pada = padaName,
+                                    effects = "Harmonizes energy across $padaName pada.",
+                                    remedies = "Maintain cleanliness and appropriate color balance."
+                                )
+                        }
+                    )
+
+                    // Outer Label Marker placed just outside outer edge
+                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.12, midAngle.toDouble())
+                    Marker(
+                        state = rememberMarkerState(key = "chakra_lbl_$padaName", position = labelPos),
+                        icon = createChakraLabelBadge(context, padaName),
+                        anchor = Offset(0.5f, 0.5f),
+                        flat = true,
+                        zIndex = 4f
+                    )
+                }
+
+                // Blue dot at exact center
                 Marker(
-                    state = centroidState,
-                    title = "Brahmasthan (Center)",
+                    state = rememberMarkerState(key = "chakra_center_dot", position = center),
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
-                    zIndex = 3f
+                    zIndex = 5f,
+                    title = "Brahmasthan (Center)"
                 )
             }
         }
 
-        // Sub-Inch Precision Aiming Crosshair in Center of Map (While Plotting)
-        if (!isGuidingMode && centroid == null) {
+        // Sub-Inch Precision Aiming Crosshair in Center of Map
+        if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -666,7 +812,7 @@ actual fun MapScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("MARK MAP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color(0xFF1E293B))
+                    Text(if (isVastuChakraMode) "VASTU CHAKRA" else "MARK MAP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color(0xFF1E293B))
                     if (centroid != null) {
                         Text(
                             text = "${formatArea(totalAreaSqFt)} sq. ft.",
@@ -685,8 +831,7 @@ actual fun MapScreen() {
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // One-Step Back (Undo) Icon
-                    if (corners.isNotEmpty() && !isGuidingMode) {
+                    if (corners.isNotEmpty() && !isGuidingMode && !isVastuChakraMode) {
                         IconButton(
                             onClick = {
                                 if (centroid != null) {
@@ -750,6 +895,7 @@ actual fun MapScreen() {
                                 centroid = null
                                 totalAreaSqFt = 0.0
                                 isGuidingMode = false
+                                isVastuChakraMode = false
                                 editingEdgeIndex = null
                                 distanceInputText = ""
                                 savePlotToStorage(context, emptyList(), null, 0.0)
@@ -771,11 +917,11 @@ actual fun MapScreen() {
             val boxLabel = if (isEditing) {
                 val p1 = getPointLabel(editingEdgeIndex!!)
                 val p2 = getPointLabel((editingEdgeIndex!! + 1) % corners.size)
-                "Modify Line $p1 ->$p2 (ft)"
+                "Modify Line $p1 -> $p2 (ft)"
             } else {
                 val prev = getPointLabel(nextIndex - 1)
                 val nxt = getPointLabel(nextIndex)
-                "Length $prev ->$nxt (ft)"
+                "Length $prev -> $nxt (ft)"
             }
 
             Card(
@@ -877,7 +1023,7 @@ actual fun MapScreen() {
                 .padding(end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (!isGuidingMode && centroid == null) {
+            if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
                 ExtendedFloatingActionButton(
                     text = { Text("Add Crosshair", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     icon = { Icon(Icons.Default.CenterFocusStrong, contentDescription = null, modifier = Modifier.size(18.dp)) },
@@ -941,7 +1087,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Bottom Action Controls
+        // Bottom Action Controls (3 Buttons when calculated: ReCalculate, Mark Center, Draw VastuChakra)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -977,38 +1123,52 @@ actual fun MapScreen() {
             } else if (!isGuidingMode) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
                         onClick = {
                             centroid = null
+                            isVastuChakraMode = false
                             totalAreaSqFt = 0.0
                             savePlotToStorage(context, corners, null, 0.0)
                         },
                         colors = ButtonDefaults.outlinedButtonColors(backgroundColor = Color.White),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f).height(48.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF334155))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("ReCalculate", fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+                        Text("ReCalculate", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
                     }
 
                     Button(
-                        onClick = { isGuidingMode = true },
+                        onClick = {
+                            isVastuChakraMode = false
+                            isGuidingMode = true
+                        },
                         colors = ButtonDefaults.buttonColors(backgroundColor = VastuGreen, contentColor = Color.White),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1.2f).height(48.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Icon(Icons.Default.Navigation, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Mark Center", fontWeight = FontWeight.ExtraBold)
+                        Text("Mark Center", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+
+                    Button(
+                        onClick = { isVastuChakraMode = !isVastuChakraMode },
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = if (isVastuChakraMode) Color(0xFF1E3A8A) else Saffron,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1.2f).height(44.dp)
+                    ) {
+                        Icon(Icons.Default.DonutLarge, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (isVastuChakraMode) "Hide Chakra" else "VastuChakra", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
         }
 
-        // Live Guidance Overlay: Points strictly from Current Location -> Marked Center
+        // Live Guidance Overlay
         if (isGuidingMode) {
             val dotColor by animateColorAsState(if (isAtCenter) Color(0xFF16A34A) else Color(0xFFDC2626))
 
@@ -1097,5 +1257,77 @@ actual fun MapScreen() {
                 }
             }
         }
+
+        // Rich Vastu Zone Details Modal Dialog (Triggered when tapping any Vastu Chakra sector)
+        if (selectedVastuZone != null) {
+            val zone = selectedVastuZone!!
+            AlertDialog(
+                onDismissRequest = { selectedVastuZone = null },
+                title = {
+                    Column {
+                        Text(text = "${zone.name} (${zone.id})", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color(0xFF1E293B))
+                        if (zone.sanskritName.isNotBlank()) {
+                            Text(text = "Sanskrit: ${zone.sanskritName}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Saffron)
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Divider(color = Color(0xFFE2E8F0))
+
+                        InfoRow("Element:", zone.element)
+                        InfoRow("Degrees:", "${zone.startDeg}° - ${zone.endDeg}°")
+                        InfoRow("Pada / Entrance:", zone.pada)
+                        InfoRow("Shapes:", zone.shape)
+                        InfoRow("Good Colors:", zone.goodColor)
+                        InfoRow("Bad Colors:", zone.badColor)
+                        InfoRow("Good Metals:", zone.goodMetal)
+                        InfoRow("Bad Metals:", zone.badMetal)
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Attributes & Effects:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF334155))
+                        Text(zone.effects.ifBlank { zone.attributes }, fontSize = 12.5.sp, color = Color(0xFF64748B))
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Strictly Avoid:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFFDC2626))
+                        Text(zone.strictlyAvoid.ifBlank { "None specified" }, fontSize = 12.5.sp, color = Color(0xFF991B1B))
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Recommended Remedies:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = VastuGreen)
+                        Text(zone.remedies.ifBlank { "Keep clean and well-balanced." }, fontSize = 12.5.sp, color = Color(0xFF065F46))
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Good Businesses:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF334155))
+                        Text(zone.goodBusiness.ifBlank { "General commerce" }, fontSize = 12.5.sp, color = Color(0xFF64748B))
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { selectedVastuZone = null },
+                        colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Close", fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun InfoRow(label: String, value: String) {
+    if (value.isBlank()) return
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF475569), modifier = Modifier.weight(0.4f))
+        Text(text = value, fontSize = 12.sp, color = Color(0xFF1E293B), modifier = Modifier.weight(0.6f))
     }
 }
