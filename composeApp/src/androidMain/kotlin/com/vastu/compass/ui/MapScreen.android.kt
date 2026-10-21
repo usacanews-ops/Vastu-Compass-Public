@@ -21,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -68,12 +69,95 @@ const val FEET_TO_METERS = 0.3048
 const val SQ_METERS_TO_SQ_FEET = 10.7639
 const val EARTH_RADIUS_METERS = 6378137.0 // WGS84 exact equatorial radius
 
-fun formatDec(value: Double, digits: Int = 1): String {
-    return String.format(Locale.US, "%.${digits}f", value)
+enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit: String) {
+    FEET("Feet", "ft", "sq. ft."),
+    METERS("Meters", "m", "sq. m"),
+    CENTIMETERS("Centimeters", "cm", "sq. cm"),
+    INCHES("Inches", "in", "sq. in");
+
+    /**
+     * Converts a hierarchical input "x.y" (e.g. 12.6 feet = 12 ft 6 in) into pure meters.
+     */
+    fun parseHierarchicalToMeters(input: String): Double? {
+        val trimmed = input.trim()
+        if (trimmed.isBlank()) return null
+        val parts = trimmed.split(".")
+        val primary = parts[0].toDoubleOrNull() ?: return null
+        val sub = if (parts.size > 1 && parts[1].isNotBlank()) parts[1].toDoubleOrNull() ?: 0.0 else 0.0
+
+        return when (this) {
+            FEET -> {
+                // x is feet, y is inches (1 ft = 12 in)
+                val totalFeet = primary + (sub / 12.0)
+                totalFeet * FEET_TO_METERS
+            }
+            METERS -> {
+                // x is meters, y is centimeters (1 m = 100 cm)
+                val totalMeters = primary + (sub / 100.0)
+                totalMeters
+            }
+            CENTIMETERS -> {
+                // x is cm, y is mm (1 cm = 10 mm)
+                val totalCm = primary + (sub / 10.0)
+                totalCm / 100.0
+            }
+            INCHES -> {
+                // x is inches, y is fractional 1/8ths or 1/10ths of an inch
+                val divisor = if (parts.size > 1 && parts[1].length == 1) 8.0 else 10.0.pow(parts.getOrElse(1) { "" }.length.toDouble())
+                val totalInches = primary + (sub / divisor)
+                totalInches * 0.0254
+            }
+        }
+    }
+
+    /**
+     * Formats pure meters into the display string respecting x.y hierarchical units.
+     */
+    fun formatFromMeters(meters: Double): String {
+        return when (this) {
+            FEET -> {
+                val totalInches = meters * 39.3701
+                val feet = floor(totalInches / 12.0).toInt()
+                val inches = round(totalInches % 12.0).toInt()
+                "$feet.$inches"
+            }
+            METERS -> {
+                val totalCm = meters * 100.0
+                val m = floor(meters).toInt()
+                val cm = round(totalCm % 100.0).toInt()
+                "$m.$cm"
+            }
+            CENTIMETERS -> {
+                val totalMm = meters * 1000.0
+                val cm = floor(meters * 100.0).toInt()
+                val mm = round(totalMm % 10.0).toInt()
+                "$cm.$mm"
+            }
+            INCHES -> {
+                val totalInches = meters * 39.3701
+                val inches = floor(totalInches).toInt()
+                val eighths = round((totalInches - inches) * 8.0).toInt()
+                "$inches.$eighths"
+            }
+        }
+    }
+
+    /**
+     * Converts square meters into the corresponding area unit.
+     */
+    fun formatAreaFromSqMeters(sqMeters: Double): String {
+        val converted = when (this) {
+            FEET -> sqMeters * SQ_METERS_TO_SQ_FEET
+            METERS -> sqMeters
+            CENTIMETERS -> sqMeters * 10000.0
+            INCHES -> sqMeters * 1550.0031
+        }
+        return "${String.format(Locale.US, "%,.1f", converted)} $areaUnit"
+    }
 }
 
-fun formatArea(value: Double): String {
-    return String.format(Locale.US, "%,.1f", value)
+fun formatDec(value: Double, digits: Int = 1): String {
+    return String.format(Locale.US, "%.${digits}f", value)
 }
 
 fun calculateDistanceMeters(p1: LatLng, p2: LatLng): Float {
@@ -82,9 +166,6 @@ fun calculateDistanceMeters(p1: LatLng, p2: LatLng): Float {
     return results[0]
 }
 
-/**
- * Exact forward azimuth (bearing) between two LatLng points on the WGS84 ellipsoid.
- */
 fun calculateBearing(from: LatLng, to: LatLng): Float {
     val lat1 = Math.toRadians(from.latitude)
     val lon1 = Math.toRadians(from.longitude)
@@ -98,9 +179,6 @@ fun calculateBearing(from: LatLng, to: LatLng): Float {
     return ((bearing + 360.0) % 360.0).toFloat()
 }
 
-/**
- * Projects a point strictly along the geodesic ray from origin at exact distance and bearing.
- */
 fun pointAtDistanceAndBearing(origin: LatLng, distanceMeters: Double, bearingDegrees: Double): LatLng {
     val distRatio = distanceMeters / EARTH_RADIUS_METERS
     val brngRad = Math.toRadians(bearingDegrees)
@@ -170,7 +248,7 @@ fun calculateCentroidAndArea(points: List<LatLng>): Pair<LatLng, Double> {
 
     val centroidLat = refLat + (cyMeters / metersPerDegLat)
     val centroidLng = refLng + (cxMeters / metersPerDegLng)
-    return Pair(LatLng(centroidLat, centroidLng), areaSqMeters * SQ_METERS_TO_SQ_FEET)
+    return Pair(LatLng(centroidLat, centroidLng), areaSqMeters)
 }
 
 fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, isSelected: Boolean): BitmapDescriptor {
@@ -178,15 +256,15 @@ fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, i
 
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = if (isSelected) android.graphics.Color.WHITE else android.graphics.Color.BLACK
-        textSize = 44f
+        textSize = 40f
         isFakeBoldText = true
         alpha = alphaInt
     }
     val bounds = Rect()
     paint.getTextBounds(text, 0, text.length, bounds)
 
-    val paddingH = 34
-    val paddingV = 22
+    val paddingH = 30
+    val paddingV = 20
     val width = bounds.width() + paddingH * 2
     val height = bounds.height() + paddingV * 2
 
@@ -206,8 +284,8 @@ fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, i
     }
 
     val rect = RectF(3f, 3f, width.toFloat() - 3f, height.toFloat() - 3f)
-    canvas.drawRoundRect(rect, 20f, 20f, bgPaint)
-    canvas.drawRoundRect(rect, 20f, 20f, strokePaint)
+    canvas.drawRoundRect(rect, 18f, 18f, bgPaint)
+    canvas.drawRoundRect(rect, 18f, 18f, strokePaint)
 
     val textX = (width - bounds.width()) / 2f - bounds.left
     val textY = (height + bounds.height()) / 2f - bounds.bottom
@@ -216,9 +294,6 @@ fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, i
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-/**
- * Creates a two-part badge showing both the 16-Zone Code and the Pada Code (e.g., "N · N4", "SSW · S6").
- */
 fun createChakraLabelBadge(context: Context, zoneCode: String, padaCode: String): BitmapDescriptor {
     val fullText = "$zoneCode · $padaCode"
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -259,9 +334,6 @@ fun createChakraLabelBadge(context: Context, zoneCode: String, padaCode: String)
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-/**
- * Solid circular dot termination badge (3x line width).
- */
 fun createCircleDotBadge(context: Context, colorHex: String, radiusDp: Float): BitmapDescriptor {
     val px = (radiusDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(6)
     val size = px * 2
@@ -290,10 +362,10 @@ private const val KEY_PLOT_DATA = "saved_plot_json"
 data class SavedPlotState(
     val points: List<LatLng>,
     val centroid: LatLng?,
-    val areaSqFt: Double
+    val areaSqMeters: Double
 )
 
-fun savePlotToStorage(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqFt: Double) {
+fun savePlotToStorage(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqMeters: Double) {
     try {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (points.isEmpty()) {
@@ -315,8 +387,8 @@ fun savePlotToStorage(context: Context, points: List<LatLng>, centroid: LatLng?,
             obj.put("cLat", centroid.latitude)
             obj.put("cLng", centroid.longitude)
         }
-        val safeArea = if (areaSqFt.isNaN() || areaSqFt.isInfinite()) 0.0 else areaSqFt
-        obj.put("areaSqFt", safeArea)
+        val safeArea = if (areaSqMeters.isNaN() || areaSqMeters.isInfinite()) 0.0 else areaSqMeters
+        obj.put("areaSqMeters", safeArea)
         prefs.edit().putString(KEY_PLOT_DATA, obj.toString()).commit()
     } catch (e: Exception) {
         e.printStackTrace()
@@ -342,7 +414,7 @@ fun loadPlotFromStorage(context: Context): SavedPlotState? {
             LatLng(obj.getDouble("cLat"), obj.getDouble("cLng"))
         } else null
 
-        val loadedArea = obj.optDouble("areaSqFt", 0.0)
+        val loadedArea = obj.optDouble("areaSqMeters", 0.0)
         SavedPlotState(loadedCorners, loadedCentroid, loadedArea)
     } catch (e: Exception) {
         e.printStackTrace()
@@ -350,110 +422,33 @@ fun loadPlotFromStorage(context: Context): SavedPlotState? {
     }
 }
 
-fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqFt: Double) {
-    if (points.isEmpty()) return
-
-    val kmlCoordinates = StringBuilder()
-    points.forEach { pt ->
-        kmlCoordinates.append("${formatDec(pt.longitude, 9)},${formatDec(pt.latitude, 9)},0\n")
-    }
-    kmlCoordinates.append("${formatDec(points[0].longitude, 9)},${formatDec(points[0].latitude, 9)},0\n")
-
-    val centroidPlacemark = if (centroid != null) {
-        """
-            <Placemark>
-              <name>Brahmasthan (Centroid)</name>
-              <Point>
-                <coordinates>${formatDec(centroid.longitude, 9)},${formatDec(centroid.latitude, 9)},0</coordinates>
-              </Point>
-            </Placemark>
-        """.trimIndent()
-    } else ""
-
-    val kmlContent = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <kml xmlns="http://www.opengis.net/kml/2.2">
-          <Document>
-            <name>Vastu Property Layout</name>
-            <description>Total Area: ${formatDec(areaSqFt, 2)} sq ft</description>
-            <Placemark>
-              <name>Property Boundary</name>
-              <Polygon>
-                <outerBoundaryIs>
-                  <LinearRing>
-                    <coordinates>
-                      $kmlCoordinates
-                    </coordinates>
-                  </LinearRing>
-                </outerBoundaryIs>
-              </Polygon>
-            </Placemark>
-            $centroidPlacemark
-          </Document>
-        </kml>
-    """.trimIndent()
-
-    try {
-        val file = File(context.cacheDir, "vastu_property_${System.currentTimeMillis()}.kml")
-        file.writeText(kmlContent)
-
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/vnd.google-earth.kml+xml"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Vastu Property Boundary & Centroid Data")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(shareIntent, "Export KML"))
-    } catch (e: Exception) {
-        Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-// 32 Vastu Pada Sector Definitions: (ZoneCode, PadaName, StartDegree)
 data class PadaDefinition(val zoneCode: String, val padaName: String, val startAngle: Float)
 
 private val PADA_32_DEFINITIONS = listOf(
-    PadaDefinition("NNW", "N1", 348.75f),
-    PadaDefinition("N",   "N2", 360.0f),
-    PadaDefinition("N",   "N3", 11.25f),
-    PadaDefinition("N",   "N4", 22.5f),
-    PadaDefinition("NNE", "N5", 33.75f),
-    PadaDefinition("NNE", "N6", 45.0f),
-    PadaDefinition("NE",  "N7", 56.25f),
-    PadaDefinition("NE",  "N8", 67.5f),
-    PadaDefinition("ENE", "E1", 78.75f),
-    PadaDefinition("ENE", "E2", 90.0f),
-    PadaDefinition("E",   "E3", 101.25f),
-    PadaDefinition("E",   "E4", 112.5f),
-    PadaDefinition("ESE", "E5", 123.75f),
-    PadaDefinition("ESE", "E6", 135.0f),
-    PadaDefinition("SE",  "E7", 146.25f),
-    PadaDefinition("SE",  "E8", 157.5f),
-    PadaDefinition("SSE", "S1", 168.75f),
-    PadaDefinition("SSE", "S2", 180.0f),
-    PadaDefinition("S",   "S3", 191.25f),
-    PadaDefinition("S",   "S4", 202.5f),
-    PadaDefinition("SSW", "S5", 213.75f),
-    PadaDefinition("SSW", "S6", 225.0f),
-    PadaDefinition("SW",  "S7", 236.25f),
-    PadaDefinition("SW",  "S8", 247.5f),
-    PadaDefinition("WSW", "W1", 258.75f),
-    PadaDefinition("WSW", "W2", 270.0f),
-    PadaDefinition("W",   "W3", 281.25f),
-    PadaDefinition("W",   "W4", 292.5f),
-    PadaDefinition("WNW", "W5", 303.75f),
-    PadaDefinition("WNW", "W6", 315.0f),
-    PadaDefinition("NW",  "W7", 326.25f),
-    PadaDefinition("NW",  "W8", 337.5f)
+    PadaDefinition("NNW", "N1", 348.75f), PadaDefinition("N", "N2", 360.0f),
+    PadaDefinition("N", "N3", 11.25f), PadaDefinition("N", "N4", 22.5f),
+    PadaDefinition("NNE", "N5", 33.75f), PadaDefinition("NNE", "N6", 45.0f),
+    PadaDefinition("NE", "N7", 56.25f), PadaDefinition("NE", "N8", 67.5f),
+    PadaDefinition("ENE", "E1", 78.75f), PadaDefinition("ENE", "E2", 90.0f),
+    PadaDefinition("E", "E3", 101.25f), PadaDefinition("E", "E4", 112.5f),
+    PadaDefinition("ESE", "E5", 123.75f), PadaDefinition("ESE", "E6", 135.0f),
+    PadaDefinition("SE", "E7", 146.25f), PadaDefinition("SE", "E8", 157.5f),
+    PadaDefinition("SSE", "S1", 168.75f), PadaDefinition("SSE", "S2", 180.0f),
+    PadaDefinition("S", "S3", 191.25f), PadaDefinition("S", "S4", 202.5f),
+    PadaDefinition("SSW", "S5", 213.75f), PadaDefinition("SSW", "S6", 225.0f),
+    PadaDefinition("SW", "S7", 236.25f), PadaDefinition("SW", "S8", 247.5f),
+    PadaDefinition("WSW", "W1", 258.75f), PadaDefinition("WSW", "W2", 270.0f),
+    PadaDefinition("W", "W3", 281.25f), PadaDefinition("W", "W4", 292.5f),
+    PadaDefinition("WNW", "W5", 303.75f), PadaDefinition("WNW", "W6", 315.0f),
+    PadaDefinition("NW", "W7", 326.25f), PadaDefinition("NW", "W8", 337.5f)
 )
 
 fun getVastuColorForPada(padaId: String): Color {
     return when {
-        padaId.startsWith("N") -> Color(0xFF64B5F6) // Water / Blue
-        padaId.startsWith("E") -> Color(0xFF81C784) // Wood / Green
-        padaId.startsWith("S") -> Color(0xFFE57373) // Fire / Red
-        padaId.startsWith("W") -> Color(0xFFFFF176) // Space / Yellow
+        padaId.startsWith("N") -> Color(0xFF64B5F6)
+        padaId.startsWith("E") -> Color(0xFF81C784)
+        padaId.startsWith("S") -> Color(0xFFE57373)
+        padaId.startsWith("W") -> Color(0xFFFFF176)
         else -> Color(0xFFBDBDBD)
     }
 }
@@ -468,6 +463,9 @@ actual fun MapScreen() {
 
     val vastuPkg by VastuRepository.dataFlow.collectAsState()
 
+    var selectedUnit by remember { mutableStateOf(PlotUnit.FEET) }
+    var unitDropdownExpanded by remember { mutableStateOf(false) }
+
     val initialSavedPlot = remember { loadPlotFromStorage(context) }
 
     val corners = remember {
@@ -476,7 +474,7 @@ actual fun MapScreen() {
         }
     }
     var centroid by remember { mutableStateOf(initialSavedPlot?.centroid) }
-    var totalAreaSqFt by remember { mutableStateOf(initialSavedPlot?.areaSqFt ?: 0.0) }
+    var totalAreaSqMeters by remember { mutableStateOf(initialSavedPlot?.areaSqMeters ?: 0.0) }
 
     val cameraPositionState = rememberCameraPositionState {
         val startTarget = initialSavedPlot?.centroid
@@ -548,7 +546,7 @@ actual fun MapScreen() {
         if (fineGranted) {
             promptEnableHighAccuracyLocation()
         } else {
-            Toast.makeText(context, "Please enable PRECISE location for inch-level accuracy", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Please enable PRECISE location for accuracy", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -648,11 +646,11 @@ actual fun MapScreen() {
                     corners.add(latLng)
                     editingEdgeIndex = null
                     distanceInputText = ""
-                    savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                    savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
                 }
             }
         ) {
-            // 1. Draggable Corner Markers (Red points at 100% visibility when Chakra is drawn)
+            // 1. Draggable Corner Markers
             corners.forEachIndexed { index, point ->
                 val markerState = rememberMarkerState(key = "marker_${index}", position = point)
 
@@ -669,9 +667,9 @@ actual fun MapScreen() {
                             if (centroid != null) {
                                 val (newCentroid, newArea) = calculateCentroidAndArea(corners)
                                 centroid = newCentroid
-                                totalAreaSqFt = newArea
+                                totalAreaSqMeters = newArea
                             }
-                            savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                            savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
                         }
                     }
                 }
@@ -684,7 +682,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 2. Connecting Lines & Distance Badges (Hidden when VastuChakra is drawn)
+            // 2. Connecting Lines & Unit-Aware Distance Badges
             if (corners.size >= 2 && !isVastuChakraMode) {
                 val edgeCount = if (corners.size >= 3) corners.size else 1
                 for (i in 0 until edgeCount) {
@@ -698,21 +696,21 @@ actual fun MapScreen() {
                         clickable = true,
                         onClick = {
                             if (!isGuidingMode && centroid == null) {
-                                val dFeet = calculateDistanceMeters(p1, p2) * METERS_TO_FEET
+                                val dMeters = calculateDistanceMeters(p1, p2).toDouble()
                                 editingEdgeIndex = i
-                                distanceInputText = formatDec(dFeet, 1)
+                                distanceInputText = selectedUnit.formatFromMeters(dMeters)
                             }
                         }
                     )
 
                     val midLat = (p1.latitude + p2.latitude) / 2.0
                     val midLng = (p1.longitude + p2.longitude) / 2.0
-                    val distanceFeet = calculateDistanceMeters(p1, p2) * METERS_TO_FEET
-                    val badgeText = "${formatDec(distanceFeet, 1)} ft"
+                    val dMeters = calculateDistanceMeters(p1, p2).toDouble()
+                    val badgeFormatted = "${selectedUnit.formatFromMeters(dMeters)} ${selectedUnit.shortUnit}"
                     val isThisEdgeSelected = editingEdgeIndex == i
 
                     val badgeState = rememberMarkerState(
-                        key = "edge_${i}_${badgeText}_${isCalculated}_$isThisEdgeSelected",
+                        key = "edge_${i}_${badgeFormatted}_${isCalculated}_$isThisEdgeSelected",
                         position = LatLng(midLat, midLng)
                     )
                     LaunchedEffect(midLat, midLng) {
@@ -721,14 +719,14 @@ actual fun MapScreen() {
 
                     Marker(
                         state = badgeState,
-                        icon = createDistanceBadge(context, badgeText, isCalculated, isThisEdgeSelected),
+                        icon = createDistanceBadge(context, badgeFormatted, isCalculated, isThisEdgeSelected),
                         anchor = Offset(0.5f, 0.5f),
                         flat = true,
                         zIndex = 2f,
                         onClick = {
                             if (!isGuidingMode && centroid == null) {
                                 editingEdgeIndex = i
-                                distanceInputText = formatDec(distanceFeet, 1)
+                                distanceInputText = selectedUnit.formatFromMeters(dMeters)
                             }
                             true
                         }
@@ -746,7 +744,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 4. Centroid Marker (Hidden in VastuChakra mode in favor of the center dot)
+            // 4. Centroid Marker
             centroid?.let { centerPoint ->
                 if (!isVastuChakraMode) {
                     val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
@@ -759,11 +757,10 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra: 32 Sectors, 16 Direction + Pada Labels, Red & Blue Calibrated Alignment Lines
+            // 5. Vastu Chakra: 32 Sectors & Dynamic Alignment Lines
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
 
-                // A. 32 Vastu Wedges & Dynamic Labels
                 PADA_32_DEFINITIONS.forEach { def ->
                     val adjustedStart = (def.startAngle + vastuRotationOffset + 360f) % 360f
                     val sweepAngle = 11.25f
@@ -783,7 +780,7 @@ actual fun MapScreen() {
 
                     Polygon(
                         points = wedgePoints,
-                        fillColor = zoneColor.copy(alpha = 0.30f), // 30% fill opacity
+                        fillColor = zoneColor.copy(alpha = 0.30f),
                         strokeColor = Color(0xFF1E293B).copy(alpha = 0.5f),
                         strokeWidth = 1.5f,
                         clickable = true,
@@ -803,7 +800,6 @@ actual fun MapScreen() {
                         }
                     )
 
-                    // Both 16-Direction and Pada labels rotate together with the Chakra
                     val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.13, midAngle.toDouble())
                     Marker(
                         state = rememberMarkerState(
@@ -817,8 +813,7 @@ actual fun MapScreen() {
                     )
                 }
 
-                // B. LINE 1: RED SLIM LINE (Magnetic Compass North)
-                // Center -> Outer circle + 20%. Counter-rotates so it always points strictly to Magnetic North.
+                // LINE 1: RED SLIM LINE (Magnetic Compass North)
                 val cameraHeading = cameraPositionState.position.bearing
                 val trueCompassBearing = (360.0 - deviceAzimuth + cameraHeading + 360.0) % 360.0
                 val compassNorthRadius = chakraRadiusMeters * 1.20
@@ -826,26 +821,23 @@ actual fun MapScreen() {
 
                 Polyline(
                     points = listOf(center, compassNorthEnd),
-                    color = Color(0xFFDC2626), // Solid Red
-                    width = 3f, // Slim 1px line
+                    color = Color(0xFFDC2626),
+                    width = 3f,
                     zIndex = 6f
                 )
 
-                // C. LINE 2: BLUE SLIM LINE (Google Maps True North + Calibration Offset)
-                // Center -> Outer circle - 10%. Anchored to Google Map True North (0.0° geographic bearing).
-                // Slides with vastuRotationOffset so you can rotate it directly over the Red Line to calibrate.
+                // LINE 2: BLUE SLIM LINE (Google Maps True North + Calibration Offset)
                 val vastuNorthAngle = (0.0 + vastuRotationOffset + 360.0) % 360.0
                 val vastuNorthRadius = chakraRadiusMeters * 0.90
                 val vastuNorthEnd = pointAtDistanceAndBearing(center, vastuNorthRadius, vastuNorthAngle)
 
                 Polyline(
                     points = listOf(center, vastuNorthEnd),
-                    color = Color(0xFF1E3A8A), // Solid Deep Blue
-                    width = 3f, // Slim 1px line
+                    color = Color(0xFF1E3A8A),
+                    width = 3f,
                     zIndex = 7f
                 )
 
-                // Blue line termination dot (3x the line width)
                 Marker(
                     state = rememberMarkerState(
                         key = "blue_dot_${formatDec(vastuNorthAngle, 2)}",
@@ -858,7 +850,6 @@ actual fun MapScreen() {
                     title = "Chakra North (0°)"
                 )
 
-                // D. Center Blue Dot (Anchor point for both lines, 100% visible)
                 Marker(
                     state = rememberMarkerState(key = "center_blue_dot", position = center),
                     icon = createCircleDotBadge(context, "#1E3A8A", radiusDp = 7f),
@@ -870,7 +861,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Sub-Inch Precision Aiming Crosshair in Center of Map
+        // Sub-Inch Precision Crosshair
         if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -886,7 +877,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Top-Left Bar: 70% Width, Stuck to Top-Left (`Alignment.TopStart`)
+        // Top-Left Bar: 70% Width with Unit Selector Dropdown
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.70f)
@@ -896,115 +887,174 @@ actual fun MapScreen() {
             backgroundColor = Color.White.copy(alpha = 0.95f),
             elevation = 4.dp
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(if (isVastuChakraMode) "VASTU CHAKRA" else "MARK MAP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color(0xFF1E293B))
-                    if (centroid != null) {
-                        Text(
-                            text = "${formatArea(totalAreaSqFt)} sq. ft.",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = VastuGreen
-                        )
-                    } else {
-                        val accText = gpsAccuracyFeet?.let { "±${formatDec(it.toDouble(), 0)}ft" } ?: "GPS..."
-                        Text(
-                            text = if (corners.isEmpty()) "Tap map ($accText)" else "${corners.size} pts ($accText)",
-                            fontSize = 10.5.sp,
-                            color = Color(0xFF475569)
-                        )
-                    }
-                }
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (isVastuChakraMode) "VASTU CHAKRA" else "MARK MAP",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.5.sp,
+                                color = Color(0xFF1E293B)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            // Unit Selector Badge
+                            Box {
+                                Surface(
+                                    color = Color(0xFFF1F5F9),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.clickable { unitDropdownExpanded = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = selectedUnit.displayName,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Saffron
+                                        )
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Saffron, modifier = Modifier.size(14.dp))
+                                    }
+                                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (corners.isNotEmpty() && !isGuidingMode && !isVastuChakraMode) {
+                                DropdownMenu(
+                                    expanded = unitDropdownExpanded,
+                                    onDismissRequest = { unitDropdownExpanded = false }
+                                ) {
+                                    PlotUnit.values().forEach { unit ->
+                                        DropdownMenuItem(onClick = {
+                                            selectedUnit = unit
+                                            unitDropdownExpanded = false
+                                        }) {
+                                            Text(
+                                                text = "${unit.displayName} (x.y = ${when(unit) {
+                                                    PlotUnit.METERS -> "m.cm"
+                                                    PlotUnit.FEET -> "ft.in"
+                                                    PlotUnit.CENTIMETERS -> "cm.mm"
+                                                    PlotUnit.INCHES -> "in.frac"
+                                                }})",
+                                                fontSize = 12.sp,
+                                                fontWeight = if (selectedUnit == unit) FontWeight.ExtraBold else FontWeight.Normal,
+                                                color = if (selectedUnit == unit) Saffron else Color(0xFF1E293B)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (centroid != null) {
+                            Text(
+                                text = selectedUnit.formatAreaFromSqMeters(totalAreaSqMeters),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = VastuGreen
+                            )
+                        } else {
+                            val accText = gpsAccuracyFeet?.let { "±${formatDec(it.toDouble(), 0)}ft" } ?: "GPS..."
+                            Text(
+                                text = if (corners.isEmpty()) "Tap map ($accText)" else "${corners.size} pts ($accText)",
+                                fontSize = 10.sp,
+                                color = Color(0xFF475569)
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (corners.isNotEmpty() && !isGuidingMode && !isVastuChakraMode) {
+                            IconButton(
+                                onClick = {
+                                    if (centroid != null) {
+                                        centroid = null
+                                        totalAreaSqMeters = 0.0
+                                        savePlotToStorage(context, corners, null, 0.0)
+                                    } else if (undoStack.isNotEmpty()) {
+                                        val prev = undoStack.removeAt(undoStack.lastIndex)
+                                        corners.clear()
+                                        corners.addAll(prev)
+                                        editingEdgeIndex = null
+                                        distanceInputText = ""
+                                        savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
+                                    } else {
+                                        corners.removeAt(corners.lastIndex)
+                                        savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Undo, contentDescription = "Step Back", tint = Color(0xFF1E293B), modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        if (centroid != null) {
+                            IconButton(
+                                onClick = {
+                                    savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
+                                    Toast.makeText(context, "Plot saved to device", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Save, contentDescription = "Save", tint = VastuGreen, modifier = Modifier.size(18.dp))
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val areaSqFt = totalAreaSqMeters * SQ_METERS_TO_SQ_FEET
+                                    exportKml(context, corners, centroid, areaSqFt)
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = "Export", tint = Saffron, modifier = Modifier.size(18.dp))
+                            }
+                        }
+
                         IconButton(
-                            onClick = {
-                                if (centroid != null) {
-                                    centroid = null
-                                    totalAreaSqFt = 0.0
-                                    savePlotToStorage(context, corners, null, 0.0)
-                                } else if (undoStack.isNotEmpty()) {
-                                    val prev = undoStack.removeAt(undoStack.lastIndex)
+                            onClick = { mapType = if (mapType == MapType.HYBRID) MapType.NORMAL else MapType.HYBRID },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                if (mapType == MapType.HYBRID) Icons.Default.Layers else Icons.Default.Satellite,
+                                contentDescription = "Map Style",
+                                tint = Color(0xFF334155),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        if (corners.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    recordStateForUndo()
                                     corners.clear()
-                                    corners.addAll(prev)
+                                    centroid = null
+                                    totalAreaSqMeters = 0.0
+                                    isGuidingMode = false
+                                    isVastuChakraMode = false
                                     editingEdgeIndex = null
                                     distanceInputText = ""
-                                    savePlotToStorage(context, corners, centroid, totalAreaSqFt)
-                                } else {
-                                    corners.removeAt(corners.lastIndex)
-                                    savePlotToStorage(context, corners, centroid, totalAreaSqFt)
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Undo, contentDescription = "Step Back", tint = Color(0xFF1E293B), modifier = Modifier.size(19.dp))
-                        }
-                    }
-
-                    if (centroid != null) {
-                        IconButton(
-                            onClick = {
-                                savePlotToStorage(context, corners, centroid, totalAreaSqFt)
-                                Toast.makeText(context, "Plot saved to device", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = "Save", tint = VastuGreen, modifier = Modifier.size(19.dp))
-                        }
-
-                        IconButton(
-                            onClick = { exportKml(context, corners, centroid, totalAreaSqFt) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = "Export", tint = Saffron, modifier = Modifier.size(19.dp))
-                        }
-                    }
-
-                    IconButton(
-                        onClick = { mapType = if (mapType == MapType.HYBRID) MapType.NORMAL else MapType.HYBRID },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            if (mapType == MapType.HYBRID) Icons.Default.Layers else Icons.Default.Satellite,
-                            contentDescription = "Map Style",
-                            tint = Color(0xFF334155),
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-
-                    if (corners.isNotEmpty()) {
-                        IconButton(
-                            onClick = {
-                                recordStateForUndo()
-                                corners.clear()
-                                centroid = null
-                                totalAreaSqFt = 0.0
-                                isGuidingMode = false
-                                isVastuChakraMode = false
-                                editingEdgeIndex = null
-                                distanceInputText = ""
-                                savePlotToStorage(context, emptyList(), null, 0.0)
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Reset All", tint = Color(0xFFDC2626), modifier = Modifier.size(19.dp))
+                                    savePlotToStorage(context, emptyList(), null, 0.0)
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Reset All", tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Vastu Chakra Rotation Calibration Card with dedicated Reset button
+        // Vastu Chakra Rotation Calibration Card
         if (isVastuChakraMode && centroid != null) {
             Card(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 74.dp, start = 10.dp, end = 10.dp)
+                    .padding(top = 78.dp, start = 10.dp, end = 10.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 backgroundColor = Color.White,
@@ -1021,7 +1071,6 @@ actual fun MapScreen() {
                             Text("${formatDec(vastuRotationOffset.toDouble(), 1)}°", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Saffron)
                         }
 
-                        // Reset Offset Button (snaps calibration back to 0.0°)
                         IconButton(
                             onClick = { vastuRotationOffset = 0f },
                             modifier = Modifier.size(28.dp)
@@ -1040,25 +1089,32 @@ actual fun MapScreen() {
             }
         }
 
-        // Box 1: Length Input & Collinear Distance Updater (Hidden when VastuChakra is active)
+        // Box 1: Hierarchical Length Input (x.y)
         if (corners.isNotEmpty() && centroid == null) {
             val isEditing = editingEdgeIndex != null
             val nextIndex = corners.size
 
+            val unitHelper = when (selectedUnit) {
+                PlotUnit.METERS -> "m.cm (e.g. 10.50)"
+                PlotUnit.FEET -> "ft.in (e.g. 12.6 = 12ft 6in)"
+                PlotUnit.CENTIMETERS -> "cm.mm (e.g. 120.5)"
+                PlotUnit.INCHES -> "in.frac (e.g. 48.4)"
+            }
+
             val boxLabel = if (isEditing) {
                 val p1 = getPointLabel(editingEdgeIndex!!)
                 val p2 = getPointLabel((editingEdgeIndex!! + 1) % corners.size)
-                "Modify Line $p1 -> $p2 (ft)"
+                "Edit $p1->$p2 [$unitHelper]"
             } else {
                 val prev = getPointLabel(nextIndex - 1)
                 val nxt = getPointLabel(nextIndex)
-                "Length $prev -> $nxt (ft)"
+                "Length $prev->$nxt [$unitHelper]"
             }
 
             Card(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 74.dp, start = 10.dp, end = 10.dp)
+                    .padding(top = 78.dp, start = 10.dp, end = 10.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 backgroundColor = Color.White,
@@ -1071,8 +1127,8 @@ actual fun MapScreen() {
                     OutlinedTextField(
                         value = distanceInputText,
                         onValueChange = { distanceInputText = it },
-                        label = { Text(boxLabel, fontSize = 11.sp) },
-                        placeholder = { Text("e.g. 40.2") },
+                        label = { Text(boxLabel, fontSize = 10.5.sp) },
+                        placeholder = { Text("e.g. 12.6") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.weight(1f).height(54.dp)
@@ -1082,8 +1138,8 @@ actual fun MapScreen() {
                     if (isEditing) {
                         Button(
                             onClick = {
-                                val ft = distanceInputText.toDoubleOrNull()
-                                if (ft != null && ft > 0 && editingEdgeIndex != null) {
+                                val meters = selectedUnit.parseHierarchicalToMeters(distanceInputText)
+                                if (meters != null && meters > 0 && editingEdgeIndex != null) {
                                     val edge = editingEdgeIndex!!
                                     val p1 = corners[edge]
                                     val p2Idx = (edge + 1) % corners.size
@@ -1093,11 +1149,11 @@ actual fun MapScreen() {
                                     val exactLineBearing = calculateBearing(p1, p2)
                                     val updatedPos = pointAtDistanceAndBearing(
                                         origin = p1,
-                                        distanceMeters = ft * FEET_TO_METERS,
+                                        distanceMeters = meters,
                                         bearingDegrees = exactLineBearing.toDouble()
                                     )
                                     corners[p2Idx] = updatedPos
-                                    savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                                    savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
                                 }
                                 editingEdgeIndex = null
                                 distanceInputText = ""
@@ -1118,10 +1174,9 @@ actual fun MapScreen() {
                     } else {
                         Button(
                             onClick = {
-                                val ft = distanceInputText.toDoubleOrNull()
-                                if (ft != null && ft > 0) {
+                                val meters = selectedUnit.parseHierarchicalToMeters(distanceInputText)
+                                if (meters != null && meters > 0) {
                                     recordStateForUndo()
-                                    val meters = ft * FEET_TO_METERS
                                     val origin = corners.last()
                                     val targetCenter = cameraPositionState.position.target
                                     val distToTarget = calculateDistanceMeters(origin, targetCenter)
@@ -1133,7 +1188,7 @@ actual fun MapScreen() {
                                     val newPos = pointAtDistanceAndBearing(origin, meters, spawnAngle)
                                     corners.add(newPos)
                                     distanceInputText = ""
-                                    savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                                    savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(backgroundColor = Saffron, contentColor = Color.White),
@@ -1147,15 +1202,15 @@ actual fun MapScreen() {
             }
         }
 
-        // Right-Side Floating Buttons (including Align to Google Map North)
+        // Floating Control Dock (Placed right above the bottom 3 buttons row)
         Column(
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 12.dp),
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 84.dp, end = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.End
         ) {
-            // "Align to Google Map North" Button: Locks camera bearing to 0° True North & resets calibration
+            // "Align to Google Map North" Button
             FloatingActionButton(
                 onClick = {
                     coroutineScope.launch {
@@ -1166,7 +1221,7 @@ actual fun MapScreen() {
                                 CameraPosition.builder()
                                     .target(currentTarget)
                                     .zoom(currentZoom)
-                                    .bearing(0f) // Exact 0.0° True North on Google Map
+                                    .bearing(0f)
                                     .tilt(0f)
                                     .build()
                             ),
@@ -1178,30 +1233,30 @@ actual fun MapScreen() {
                 },
                 backgroundColor = Color.White,
                 contentColor = Color(0xFF1E3A8A),
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(44.dp)
             ) {
-                Icon(Icons.Default.Explore, contentDescription = "Align to Google Map North", modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.Explore, contentDescription = "Align to Google Map North", modifier = Modifier.size(22.dp))
             }
 
             if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
                 ExtendedFloatingActionButton(
                     text = { Text("Add Crosshair", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    icon = { Icon(Icons.Default.CenterFocusStrong, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    icon = { Icon(Icons.Default.CenterFocusStrong, contentDescription = null, modifier = Modifier.size(17.dp)) },
                     onClick = {
                         recordStateForUndo()
                         corners.add(cameraPositionState.position.target)
                         editingEdgeIndex = null
                         distanceInputText = ""
-                        savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                        savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
                     },
                     backgroundColor = VastuGreen,
                     contentColor = Color.White,
-                    modifier = Modifier.height(40.dp)
+                    modifier = Modifier.height(38.dp)
                 )
 
                 ExtendedFloatingActionButton(
                     text = { Text("Add My GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    icon = { Icon(Icons.Default.AddLocationAlt, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    icon = { Icon(Icons.Default.AddLocationAlt, contentDescription = null, modifier = Modifier.size(17.dp)) },
                     onClick = {
                         if (!hasFineLocationPermission) {
                             permissionLauncher.launch(
@@ -1214,13 +1269,13 @@ actual fun MapScreen() {
                                 corners.add(loc)
                                 editingEdgeIndex = null
                                 distanceInputText = ""
-                                savePlotToStorage(context, corners, centroid, totalAreaSqFt)
+                                savePlotToStorage(context, corners, centroid, totalAreaSqMeters)
                             } ?: Toast.makeText(context, "Waiting for Precise GPS...", Toast.LENGTH_SHORT).show()
                         }
                     },
                     backgroundColor = Saffron,
                     contentColor = Color.White,
-                    modifier = Modifier.height(40.dp)
+                    modifier = Modifier.height(38.dp)
                 )
             }
 
@@ -1241,17 +1296,17 @@ actual fun MapScreen() {
                 },
                 backgroundColor = Color.White,
                 contentColor = Color(0xFF1E293B),
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(Icons.Default.MyLocation, contentDescription = "My Location", modifier = Modifier.size(22.dp))
             }
         }
 
-        // Bottom Action Controls: ReCalculate, Go to Center, VastuChakra
+        // Bottom Action Controls (Shifted down to bottom = 24.dp)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 76.dp, start = 16.dp, end = 16.dp),
+                .padding(bottom = 24.dp, start = 14.dp, end = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (centroid == null) {
@@ -1260,11 +1315,11 @@ actual fun MapScreen() {
                         if (corners.size >= 3) {
                             val (center, area) = calculateCentroidAndArea(corners)
                             centroid = center
-                            totalAreaSqFt = area
+                            totalAreaSqMeters = area
                             editingEdgeIndex = null
                             distanceInputText = ""
                             savePlotToStorage(context, corners, center, area)
-                            Toast.makeText(context, "Center calculated & saved", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Center & Area calculated", Toast.LENGTH_SHORT).show()
                         }
                     },
                     enabled = corners.size >= 3,
@@ -1275,9 +1330,9 @@ actual fun MapScreen() {
                     Icon(Icons.Default.Adjust, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (corners.size >= 3) "CALCULATE CENTER" else "PLACE AT LEAST 3 CORNERS",
+                        text = if (corners.size >= 3) "CALCULATE CENTER / AREA" else "PLACE AT LEAST 3 CORNERS",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.5.sp
                     )
                 }
             } else if (!isGuidingMode) {
@@ -1289,14 +1344,14 @@ actual fun MapScreen() {
                         onClick = {
                             centroid = null
                             isVastuChakraMode = false
-                            totalAreaSqFt = 0.0
+                            totalAreaSqMeters = 0.0
                             savePlotToStorage(context, corners, null, 0.0)
                         },
                         colors = ButtonDefaults.outlinedButtonColors(backgroundColor = Color.White),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Text("ReCalculate", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+                        Text("ReCalculate", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
                     }
 
                     Button(
@@ -1308,7 +1363,7 @@ actual fun MapScreen() {
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Text("Go to Center", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Go to Center", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
                     }
 
                     Button(
@@ -1376,7 +1431,7 @@ actual fun MapScreen() {
                 Card(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 80.dp, start = 16.dp, end = 16.dp)
+                        .padding(bottom = 30.dp, start = 16.dp, end = 16.dp)
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     backgroundColor = Color.White,
@@ -1395,10 +1450,10 @@ actual fun MapScreen() {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (isAtCenter) {
-                                "You are at the Brahmasthan (${formatArea(totalAreaSqFt)} sq. ft.)"
+                                "You are at the Brahmasthan (${selectedUnit.formatAreaFromSqMeters(totalAreaSqMeters)})"
                             } else if (distanceToCentroid != null) {
-                                val distFeet = distanceToCentroid * METERS_TO_FEET
-                                "Distance: ${formatDec(distFeet, 1)} ft (${formatDec(distanceToCentroid.toDouble(), 2)} m)"
+                                val distFormatted = selectedUnit.formatFromMeters(distanceToCentroid.toDouble())
+                                "Distance: $distFormatted ${selectedUnit.shortUnit} (${formatDec(distanceToCentroid.toDouble(), 2)} m)"
                             } else {
                                 "Acquiring Precise GPS..."
                             },
