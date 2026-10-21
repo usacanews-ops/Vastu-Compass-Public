@@ -18,7 +18,8 @@ import kotlinx.serialization.json.Json
 import kotlin.random.Random
 
 object VastuRepository {
-    private const val LIVE_DATA_URL = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/vastu_data.json"
+    // UPDATED: Pointing to the new hybrid vastu2.json
+    private const val LIVE_DATA_URL = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/vastu2.json"
     private const val LIVE_PRODUCTS_URL = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/products.json"
 
     private val client = HttpClient()
@@ -27,6 +28,7 @@ object VastuRepository {
     private val jsonFormat = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        coerceInputValues = true // Ensures safety with the new hybrid JSON structure
     }
 
     private val _dataFlow = MutableStateFlow<VastuDataPackage?>(null)
@@ -75,7 +77,7 @@ object VastuRepository {
         return try {
             val cacheBuster = Random.nextInt(10000, 99999)
 
-            // A. Sincronización de vastu_data.json
+            // A. Sincronización de vastu2.json
             val url = "$LIVE_DATA_URL?v=$cacheBuster"
             val response = client.get(url).bodyAsText()
             val remoteData = jsonFormat.decodeFromString<VastuDataPackage>(response)
