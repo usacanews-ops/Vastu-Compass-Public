@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,6 +79,9 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
     val animatedDegrees by animateFloatAsState(targetValue = rawDegrees, animationSpec = tween(180))
 
     val pkg by VastuRepository.dataFlow.collectAsState()
+    val products by VastuRepository.productsFlow.collectAsState()
+    val uriHandler = LocalUriHandler.current
+
     val item = pkg?.items?.firstOrNull { it.id == itemId }
 
     val currentPada = remember(rawDegrees) { calculatePada(rawDegrees) }
@@ -363,30 +367,72 @@ fun ItemDetailScreen(itemId: String, onBack: () -> Unit) {
 
                         val remedy = activeEffect?.remedy?.ifBlank { null } ?: activeZone.remedies.ifBlank { null }
                         if (remedy != null) {
+                            val linkedProduct = activeEffect?.productId?.let { pid ->
+                                products.firstOrNull { it.id.equals(pid, ignoreCase = true) }
+                            }
+
                             Spacer(modifier = Modifier.height(12.dp))
                             Surface(
-                                color = Color(0xFFFEF2F2),
-                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFFFFBEB),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
+                                Column(modifier = Modifier.padding(14.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Build, contentDescription = null, tint = Color(0xFFB91C1C), modifier = Modifier.size(16.dp))
+                                        Icon(
+                                            Icons.Default.Build,
+                                            contentDescription = null,
+                                            tint = Color(0xFFD97706),
+                                            modifier = Modifier.size(17.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Recommended Vastu Remedy",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            color = Color(0xFFB91C1C)
+                                            text = "RECOMMENDED REMEDY",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 11.5.sp,
+                                            color = Color(0xFFB45309)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = remedy,
                                         fontSize = 13.sp,
-                                        color = Color(0xFF991B1B),
-                                        lineHeight = 18.sp
+                                        color = Color(0xFF78350F),
+                                        lineHeight = 19.sp
                                     )
+
+                                    if (!activeEffect?.productId.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Button(
+                                            onClick = {
+                                                val targetUrl = linkedProduct?.buyUrl?.ifBlank { null }
+                                                    ?: "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/"
+                                                try { uriHandler.openUri(targetUrl) } catch (_: Exception) {}
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                backgroundColor = Color(0xFFD97706),
+                                                contentColor = Color.White
+                                            ),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            modifier = Modifier.height(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (linkedProduct != null && linkedProduct.price.isNotBlank()) {
+                                                    "Buy ${linkedProduct.title} (${linkedProduct.price})"
+                                                } else if (linkedProduct != null) {
+                                                    "Buy ${linkedProduct.title}"
+                                                } else {
+                                                    "View Remedy Product"
+                                                },
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
