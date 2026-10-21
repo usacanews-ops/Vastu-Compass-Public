@@ -216,14 +216,18 @@ fun createDistanceBadge(context: Context, text: String, isCalculated: Boolean, i
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
-fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
+/**
+ * Creates a two-part badge showing both the 16-Zone Code and the Pada Code (e.g., "N · N4", "SSW · S6").
+ */
+fun createChakraLabelBadge(context: Context, zoneCode: String, padaCode: String): BitmapDescriptor {
+    val fullText = "$zoneCode · $padaCode"
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#0F172A")
-        textSize = 28f
+        textSize = 27f
         isFakeBoldText = true
     }
     val bounds = Rect()
-    paint.getTextBounds(text, 0, text.length, bounds)
+    paint.getTextBounds(fullText, 0, fullText.length, bounds)
 
     val paddingH = 14
     val paddingV = 8
@@ -234,23 +238,23 @@ fun createChakraLabelBadge(context: Context, text: String): BitmapDescriptor {
     val canvas = AndroidCanvas(bitmap)
 
     val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#F8FAFC")
+        color = android.graphics.Color.parseColor("#FFFFFF")
         style = Paint.Style.FILL
-        alpha = 235
+        alpha = 240
     }
     val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#CBD5E1")
+        color = android.graphics.Color.parseColor("#0F172A")
         style = Paint.Style.STROKE
-        strokeWidth = 2f
+        strokeWidth = 2.5f
     }
 
-    val rect = RectF(1f, 1f, width.toFloat() - 1f, height.toFloat() - 1f)
+    val rect = RectF(1.5f, 1.5f, width.toFloat() - 1.5f, height.toFloat() - 1.5f)
     canvas.drawRoundRect(rect, 10f, 10f, bgPaint)
     canvas.drawRoundRect(rect, 10f, 10f, strokePaint)
 
     val textX = (width - bounds.width()) / 2f - bounds.left
     val textY = (height + bounds.height()) / 2f - bounds.bottom
-    canvas.drawText(text, textX, textY, paint)
+    canvas.drawText(fullText, textX, textY, paint)
 
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
@@ -406,16 +410,42 @@ fun exportKml(context: Context, points: List<LatLng>, centroid: LatLng?, areaSqF
     }
 }
 
-// 32 Vastu Pada Sector Angles
-private val PADA_32_LIST = listOf(
-    Pair("N1", 348.75f), Pair("N2", 360.0f), Pair("N3", 11.25f), Pair("N4", 22.5f),
-    Pair("N5", 33.75f), Pair("N6", 45.0f), Pair("N7", 56.25f), Pair("N8", 67.5f),
-    Pair("E1", 78.75f), Pair("E2", 90.0f), Pair("E3", 101.25f), Pair("E4", 112.5f),
-    Pair("E5", 123.75f), Pair("E6", 135.0f), Pair("E7", 146.25f), Pair("E8", 157.5f),
-    Pair("S1", 168.75f), Pair("S2", 180.0f), Pair("S3", 191.25f), Pair("S4", 202.5f),
-    Pair("S5", 213.75f), Pair("S6", 225.0f), Pair("S7", 236.25f), Pair("S8", 247.5f),
-    Pair("W1", 258.75f), Pair("W2", 270.0f), Pair("W3", 281.25f), Pair("W4", 292.5f),
-    Pair("W5", 303.75f), Pair("W6", 315.0f), Pair("W7", 326.25f), Pair("W8", 337.5f)
+// 32 Vastu Pada Sector Definitions: (ZoneCode, PadaName, StartDegree)
+data class PadaDefinition(val zoneCode: String, val padaName: String, val startAngle: Float)
+
+private val PADA_32_DEFINITIONS = listOf(
+    PadaDefinition("NNW", "N1", 348.75f),
+    PadaDefinition("N",   "N2", 360.0f),
+    PadaDefinition("N",   "N3", 11.25f),
+    PadaDefinition("N",   "N4", 22.5f),
+    PadaDefinition("NNE", "N5", 33.75f),
+    PadaDefinition("NNE", "N6", 45.0f),
+    PadaDefinition("NE",  "N7", 56.25f),
+    PadaDefinition("NE",  "N8", 67.5f),
+    PadaDefinition("ENE", "E1", 78.75f),
+    PadaDefinition("ENE", "E2", 90.0f),
+    PadaDefinition("E",   "E3", 101.25f),
+    PadaDefinition("E",   "E4", 112.5f),
+    PadaDefinition("ESE", "E5", 123.75f),
+    PadaDefinition("ESE", "E6", 135.0f),
+    PadaDefinition("SE",  "E7", 146.25f),
+    PadaDefinition("SE",  "E8", 157.5f),
+    PadaDefinition("SSE", "S1", 168.75f),
+    PadaDefinition("SSE", "S2", 180.0f),
+    PadaDefinition("S",   "S3", 191.25f),
+    PadaDefinition("S",   "S4", 202.5f),
+    PadaDefinition("SSW", "S5", 213.75f),
+    PadaDefinition("SSW", "S6", 225.0f),
+    PadaDefinition("SW",  "S7", 236.25f),
+    PadaDefinition("SW",  "S8", 247.5f),
+    PadaDefinition("WSW", "W1", 258.75f),
+    PadaDefinition("WSW", "W2", 270.0f),
+    PadaDefinition("W",   "W3", 281.25f),
+    PadaDefinition("W",   "W4", 292.5f),
+    PadaDefinition("WNW", "W5", 303.75f),
+    PadaDefinition("WNW", "W6", 315.0f),
+    PadaDefinition("NW",  "W7", 326.25f),
+    PadaDefinition("NW",  "W8", 337.5f)
 )
 
 fun getVastuColorForPada(padaId: String): Color {
@@ -716,7 +746,7 @@ actual fun MapScreen() {
                 )
             }
 
-            // 4. Centroid Marker (Hidden in VastuChakra mode in favor of the blue dot)
+            // 4. Centroid Marker (Hidden in VastuChakra mode in favor of the center dot)
             centroid?.let { centerPoint ->
                 if (!isVastuChakraMode) {
                     val centroidState = rememberMarkerState(key = "centroid_${centerPoint.latitude}_${centerPoint.longitude}", position = centerPoint)
@@ -729,13 +759,13 @@ actual fun MapScreen() {
                 }
             }
 
-            // 5. Vastu Chakra: 32 Sectors (30% Opacity), Calibrated Dynamic Labels, and Slim Alignment Lines
+            // 5. Vastu Chakra: 32 Sectors, 16 Direction + Pada Labels, Red & Blue Calibrated Alignment Lines
             if (isVastuChakraMode && centroid != null) {
                 val center = centroid!!
 
-                // A. 32 Vastu Wedges
-                PADA_32_LIST.forEach { (padaName, startAngle) ->
-                    val adjustedStart = (startAngle + vastuRotationOffset + 360f) % 360f
+                // A. 32 Vastu Wedges & Dynamic Labels
+                PADA_32_DEFINITIONS.forEach { def ->
+                    val adjustedStart = (def.startAngle + vastuRotationOffset + 360f) % 360f
                     val sweepAngle = 11.25f
                     val endAngle = (adjustedStart + sweepAngle) % 360f
                     val midAngle = (adjustedStart + (sweepAngle / 2f)) % 360f
@@ -749,54 +779,46 @@ actual fun MapScreen() {
                         add(center)
                     }
 
-                    val zoneColor = getVastuColorForPada(padaName)
+                    val zoneColor = getVastuColorForPada(def.padaName)
 
                     Polygon(
                         points = wedgePoints,
-                        fillColor = zoneColor.copy(alpha = 0.30f), // Exactly 30% fill opacity
+                        fillColor = zoneColor.copy(alpha = 0.30f), // 30% fill opacity
                         strokeColor = Color(0xFF1E293B).copy(alpha = 0.5f),
                         strokeWidth = 1.5f,
                         clickable = true,
                         onClick = {
-                            val baseZoneKey = when {
-                                padaName.startsWith("N") -> "N"
-                                padaName.startsWith("E") -> "E"
-                                padaName.startsWith("S") -> "S"
-                                padaName.startsWith("W") -> "W"
-                                else -> "N"
-                            }
-                            selectedVastuZone = vastuPkg?.zones?.firstOrNull { it.id.equals(baseZoneKey, ignoreCase = true) }
+                            selectedVastuZone = vastuPkg?.zones?.firstOrNull { it.id.equals(def.zoneCode, ignoreCase = true) }
                                 ?: VastuZone(
-                                    id = baseZoneKey,
-                                    name = baseZoneKey,
+                                    id = def.zoneCode,
+                                    name = def.zoneCode,
                                     element = "Vastu",
                                     startDeg = adjustedStart,
                                     endDeg = endAngle,
-                                    attributes = "Vastu Chakra sector $padaName",
-                                    pada = padaName,
-                                    effects = "Harmonizes energy across $padaName pada.",
+                                    attributes = "Vastu Chakra sector ${def.zoneCode} (${def.padaName})",
+                                    pada = def.padaName,
+                                    effects = "Harmonizes energy across ${def.zoneCode} zone.",
                                     remedies = "Maintain cleanliness and appropriate color balance."
                                 )
                         }
                     )
 
-                    // Direction labels dynamically rotate around the perimeter in lockstep with slider calibration
-                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.12, midAngle.toDouble())
+                    // Both 16-Direction and Pada labels rotate together with the Chakra
+                    val labelPos = pointAtDistanceAndBearing(center, chakraRadiusMeters * 1.13, midAngle.toDouble())
                     Marker(
                         state = rememberMarkerState(
-                            key = "lbl_${padaName}_${formatDec(adjustedStart.toDouble(), 2)}",
+                            key = "lbl_${def.zoneCode}_${def.padaName}_${formatDec(adjustedStart.toDouble(), 2)}",
                             position = labelPos
                         ),
-                        icon = createChakraLabelBadge(context, padaName),
+                        icon = createChakraLabelBadge(context, def.zoneCode, def.padaName),
                         anchor = Offset(0.5f, 0.5f),
                         flat = true,
                         zIndex = 4f
                     )
                 }
 
-                // B. LINE 1: RED SLIM LINE (Magnetic Compass North Pole)
-                // In geographical coordinates on Google Maps, Magnetic North is at (360 - deviceAzimuth + cameraBearing).
-                // This counter-rotates with the device so this line always points to the physical Magnetic North Pole.
+                // B. LINE 1: RED SLIM LINE (Magnetic Compass North)
+                // Center -> Outer circle + 20%. Counter-rotates so it always points strictly to Magnetic North.
                 val cameraHeading = cameraPositionState.position.bearing
                 val trueCompassBearing = (360.0 - deviceAzimuth + cameraHeading + 360.0) % 360.0
                 val compassNorthRadius = chakraRadiusMeters * 1.20
@@ -809,8 +831,9 @@ actual fun MapScreen() {
                     zIndex = 6f
                 )
 
-                // C. LINE 2: BLUE SLIM LINE (Google Maps True North with Calibration Offset)
-                // True North on Google Maps is 0.0° geographic bearing. When calibrated, it rotates by vastuRotationOffset.
+                // C. LINE 2: BLUE SLIM LINE (Google Maps True North + Calibration Offset)
+                // Center -> Outer circle - 10%. Anchored to Google Map True North (0.0° geographic bearing).
+                // Slides with vastuRotationOffset so you can rotate it directly over the Red Line to calibrate.
                 val vastuNorthAngle = (0.0 + vastuRotationOffset + 360.0) % 360.0
                 val vastuNorthRadius = chakraRadiusMeters * 0.90
                 val vastuNorthEnd = pointAtDistanceAndBearing(center, vastuNorthRadius, vastuNorthAngle)
@@ -835,7 +858,7 @@ actual fun MapScreen() {
                     title = "Chakra North (0°)"
                 )
 
-                // D. Center Blue Dot (Terminating Center for both lines, 100% visible)
+                // D. Center Blue Dot (Anchor point for both lines, 100% visible)
                 Marker(
                     state = rememberMarkerState(key = "center_blue_dot", position = center),
                     icon = createCircleDotBadge(context, "#1E3A8A", radiusDp = 7f),
@@ -998,7 +1021,7 @@ actual fun MapScreen() {
                             Text("${formatDec(vastuRotationOffset.toDouble(), 1)}°", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Saffron)
                         }
 
-                        // Reset Offset Button
+                        // Reset Offset Button (snaps calibration back to 0.0°)
                         IconButton(
                             onClick = { vastuRotationOffset = 0f },
                             modifier = Modifier.size(28.dp)
@@ -1124,7 +1147,7 @@ actual fun MapScreen() {
             }
         }
 
-        // Right-Side Floating Buttons (including Set Map to North button)
+        // Right-Side Floating Buttons (including Align to Google Map North)
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -1132,7 +1155,7 @@ actual fun MapScreen() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.End
         ) {
-            // "Set Map to North" Button: Rotates Google Map to True North (0° bearing)
+            // "Align to Google Map North" Button: Locks camera bearing to 0° True North & resets calibration
             FloatingActionButton(
                 onClick = {
                     coroutineScope.launch {
@@ -1143,19 +1166,21 @@ actual fun MapScreen() {
                                 CameraPosition.builder()
                                     .target(currentTarget)
                                     .zoom(currentZoom)
-                                    .bearing(0f) // Exact True North Alignment
+                                    .bearing(0f) // Exact 0.0° True North on Google Map
                                     .tilt(0f)
                                     .build()
-                            )
+                            ),
+                            durationMs = 600
                         )
-                        Toast.makeText(context, "Map aligned to True North (0°)", Toast.LENGTH_SHORT).show()
+                        vastuRotationOffset = 0f
+                        Toast.makeText(context, "Aligned to Google Map North (0°)", Toast.LENGTH_SHORT).show()
                     }
                 },
                 backgroundColor = Color.White,
                 contentColor = Color(0xFF1E3A8A),
                 modifier = Modifier.size(46.dp)
             ) {
-                Icon(Icons.Default.Explore, contentDescription = "Set Map to North", modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.Explore, contentDescription = "Align to Google Map North", modifier = Modifier.size(24.dp))
             }
 
             if (!isGuidingMode && !isVastuChakraMode && centroid == null) {
