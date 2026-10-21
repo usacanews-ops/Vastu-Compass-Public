@@ -2,6 +2,8 @@ name: Build Android App
 
 on:
   workflow_dispatch: # Trigger manually from the Actions tab
+  push:
+    branches: [ "hybrid" ] # Automatically builds when you commit to the hybrid branch
 
 jobs:
   build:
