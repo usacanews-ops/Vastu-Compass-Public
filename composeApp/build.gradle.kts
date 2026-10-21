@@ -36,6 +36,10 @@ kotlin {
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.8.2")
             implementation("io.ktor:ktor-client-okhttp:2.3.9")
+
+            implementation("com.google.android.gms:play-services-maps:18.2.0")
+            implementation("com.google.maps.android:maps-compose:4.3.3")
+            implementation("com.google.android.gms:play-services-location:21.2.0")
         }
     }
 }
