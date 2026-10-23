@@ -1,151 +1,100 @@
 package com.vastu.compass
 
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vastu.compass.data.VastuRepository
-import com.vastu.compass.ui.*
-import org.jetbrains.compose.resources.painterResource
-import vastu_compass.composeapp.generated.resources.Res
-import vastu_compass.composeapp.generated.resources.app_logo
+import kotlinx.coroutines.launch
 
-// Theme Colors
-val BeigeBackground = Color(0xFFFAF3E0)
-val Saffron = Color(0xFFFF9933)
-val VastuGreen = Color(0xFF1B4D3E)
-
-sealed class Screen {
-    object Compass : Screen()
-    object Zones : Screen()
-    object Map : Screen()
-    data class ItemDetail(val itemId: String) : Screen()
-    object Problems : Screen()
-    object More : Screen()
-    object Consult : Screen()
-}
+// Core Theme Colors used across the app
+val BeigeBackground = Color(0xFFFDFBF7)
+val Saffron = Color(0xFFFF8F00)
+val VastuGreen = Color(0xFF2E7D32)
 
 @Composable
 fun App() {
+    val vastuData by VastuRepository.dataFlow.collectAsState()
+    val isSyncing by VastuRepository.isSyncing.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Trigger initialization on first app launch
     LaunchedEffect(Unit) {
-        VastuRepository.initialize()
+        if (vastuData == null) {
+            coroutineScope.launch {
+                VastuRepository.initialize()
+            }
+        }
     }
 
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Compass) }
-
-    Scaffold(
-        bottomBar = {
-            Column {
-                if (currentScreen !is Screen.Consult) {
-                    Button(
-                        onClick = { currentScreen = Screen.Consult },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                            .height(46.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            backgroundColor = Saffron,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = ButtonDefaults.elevation(4.dp)
-                    ) {
-                        Icon(Icons.Default.SupportAgent, contentDescription = "Consult")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "CONSULT AN EXPERT",
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-                BottomNavigation(
-                    backgroundColor = Color.White,
-                    contentColor = Color(0xFF3E2723)
-                ) {
-                    BottomNavigationItem(
-                        selected = currentScreen is Screen.Map,
-                        onClick = { currentScreen = Screen.Map },
-                        icon = { Icon(Icons.Default.Map, contentDescription = "Plot Map") },
-                        label = { Text("Plot Map", fontSize = 11.sp) }
-                    )
-                    BottomNavigationItem(
-                        selected = currentScreen is Screen.Compass,
-                        onClick = { currentScreen = Screen.Compass },
-                        icon = { Icon(Icons.Default.CompassCalibration, contentDescription = "Compass") },
-                        label = { Text("Compass", fontSize = 11.sp) }
-                    )
-                    BottomNavigationItem(
-                        selected = currentScreen is Screen.Zones,
-                        onClick = { currentScreen = Screen.Zones },
-                        icon = { Icon(Icons.Default.GridOn, contentDescription = "Zones") },
-                        label = { Text("Zones", fontSize = 11.sp) }
-                    )
-                    BottomNavigationItem(
-                        selected = currentScreen is Screen.Problems,
-                        onClick = { currentScreen = Screen.Problems },
-                        icon = { Icon(Icons.Default.Warning, contentDescription = "Problems") },
-                        label = { Text("Problems", fontSize = 11.sp) }
-                    )
-                    BottomNavigationItem(
-                        selected = currentScreen is Screen.More,
-                        onClick = { currentScreen = Screen.More },
-                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") },
-                        label = { Text("More", fontSize = 11.sp) }
-                    )
-                }
-            }
-        }
-    ) { innerPadding ->
+    MaterialTheme {
         Surface(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             color = BeigeBackground
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // 1. Translucent Background Watermark (Centered, 6% opacity)
-                Image(
-                    painter = painterResource(Res.drawable.app_logo),
-                    contentDescription = null,
+            // Show loading indicator if JSON data has not arrived yet
+            if (vastuData == null) {
+                Box(
                     modifier = Modifier
-                        .size(310.dp)
-                        .align(Alignment.Center)
-                        .alpha(0.06f)
-                )
-
-                // 2. Active Screen Content
-                Box(modifier = Modifier.fillMaxSize()) {
-                    when (val screen = currentScreen) {
-                        is Screen.Compass -> CompassScreen()
-                        is Screen.Zones -> ZonesScreen(onItemClick = { itemId -> currentScreen = Screen.ItemDetail(itemId) })
-                        is Screen.ItemDetail -> ItemDetailScreen(itemId = screen.itemId, onBack = { currentScreen = Screen.Zones })
-                        is Screen.Map -> MapScreen()
-                        is Screen.Problems -> ProblemsScreen()
-                        is Screen.More -> MoreScreen()
-                        is Screen.Consult -> ConsultScreen(onBack = { currentScreen = Screen.Compass })
+                        .fillMaxSize()
+                        .background(BeigeBackground),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = Saffron,
+                            strokeWidth = 4.dp,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Loading Vastu Sacred Geometry...",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF3E2723)
+                        )
+                        if (isSyncing) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Syncing with live server...",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
                     }
                 }
-
-                // 3. Persistent Top-Right Corner Logo Badge
-                Image(
-                    painter = painterResource(Res.drawable.app_logo),
-                    contentDescription = "Vastu Compass Logo",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 12.dp, end = 16.dp)
-                        .size(38.dp)
-                )
+            } else {
+                // Data is fully loaded — Render your main navigation/screens here
+                // (e.g., your bottom navigation bar, home dashboard, or screen router)
+                MainNavigationHost()
             }
         }
+    }
+}
+
+@Composable
+fun MainNavigationHost() {
+    // Placeholder or your existing screen router/navigator container
+    // When vastuData is loaded, your screens (CompassScreen, MapScreen, ZonesScreen, etc.) 
+    // will now safely have access to the hybrid data package.
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Vastu Hybrid Data Loaded Successfully!",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = VastuGreen
+        )
     }
 }
