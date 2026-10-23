@@ -237,18 +237,26 @@ fun CompassScreen() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text(
-                                    text = "PADA ${pada.id} (${pada.deity})",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Saffron
-                                )
-                                Text(
-                                    text = "${pada.startDeg}° to ${pada.endDeg}°",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF64748B)
-                                )
-                            }
+            Text(
+                text = "MAIN ENTRANCE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Saffron,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "PADA ${pada.id} • ${pada.deity}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF1E293B)
+            )
+            Text(
+                text = "${pada.startDeg}° to ${pada.endDeg}°",
+                fontSize = 12.sp,
+                color = Color(0xFF64748B)
+            )
+        }
 
                             Surface(
                                 color = if (pada.isFavorableEntrance) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
