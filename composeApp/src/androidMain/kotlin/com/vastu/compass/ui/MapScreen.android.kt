@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,13 +68,20 @@ import kotlin.math.*
 const val METERS_TO_FEET = 3.28084
 const val FEET_TO_METERS = 0.3048
 const val SQ_METERS_TO_SQ_FEET = 10.7639
+const val SQ_FEET_PER_ACRE = 43560.0
+const val SQ_FEET_PER_KANAL = 5445.0 // 8 Kanals = 1 Killa / Acre (43,560 sq ft)
+const val SQ_FEET_PER_MARLA = 272.25 // 20 Marlas = 1 Kanal
+const val SQ_METERS_PER_HECTARE = 10000.0
 const val EARTH_RADIUS_METERS = 6378137.0 // WGS84 exact equatorial radius
 
 enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit: String) {
     FEET("Feet", "ft", "sq. ft."),
     METERS("Meters", "m", "sq. m"),
     CENTIMETERS("Centimeters", "cm", "sq. cm"),
-    INCHES("Inches", "in", "sq. in");
+    INCHES("Inches", "in", "sq. in"),
+    ACRE("Acre", "ft", "Acres"),
+    KILLA_KANAL("Killa-Kanal", "ft", "Killa-Kanal"),
+    HECTARE("Hectare", "m", "Hectares");
 
     fun parseHierarchicalToMeters(input: String): Double? {
         val trimmed = input.trim()
@@ -83,8 +91,8 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
         val sub = if (parts.size > 1 && parts[1].isNotBlank()) parts[1].toDoubleOrNull() ?: 0.0 else 0.0
 
         return when (this) {
-            FEET -> (primary + (sub / 12.0)) * FEET_TO_METERS
-            METERS -> primary + (sub / 100.0)
+            FEET, ACRE, KILLA_KANAL -> (primary + (sub / 12.0)) * FEET_TO_METERS
+            METERS, HECTARE -> primary + (sub / 100.0)
             CENTIMETERS -> (primary + (sub / 10.0)) / 100.0
             INCHES -> {
                 val divisor = if (parts.size > 1 && parts[1].length == 1) 8.0 else 10.0.pow(parts.getOrElse(1) { "" }.length.toDouble())
@@ -95,13 +103,13 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
 
     fun formatFromMeters(meters: Double): String {
         return when (this) {
-            FEET -> {
+            FEET, ACRE, KILLA_KANAL -> {
                 val totalInches = meters * 39.3701
                 val feet = floor(totalInches / 12.0).toInt()
                 val inches = round(totalInches % 12.0).toInt()
                 "$feet.$inches"
             }
-            METERS -> {
+            METERS, HECTARE -> {
                 val m = floor(meters).toInt()
                 val cm = round((meters * 100.0) % 100.0).toInt()
                 "$m.$cm"
@@ -121,13 +129,34 @@ enum class PlotUnit(val displayName: String, val shortUnit: String, val areaUnit
     }
 
     fun formatAreaFromSqMeters(sqMeters: Double): String {
-        val converted = when (this) {
-            FEET -> sqMeters * SQ_METERS_TO_SQ_FEET
-            METERS -> sqMeters
-            CENTIMETERS -> sqMeters * 10000.0
-            INCHES -> sqMeters * 1550.0031
+        val totalSqFt = sqMeters * SQ_METERS_TO_SQ_FEET
+        return when (this) {
+            FEET -> "${String.format(Locale.US, "%,.1f", totalSqFt)} $areaUnit"
+            METERS -> "${String.format(Locale.US, "%,.1f", sqMeters)} $areaUnit"
+            CENTIMETERS -> "${String.format(Locale.US, "%,.1f", sqMeters * 10000.0)} $areaUnit"
+            INCHES -> "${String.format(Locale.US, "%,.1f", sqMeters * 1550.0031)} $areaUnit"
+            ACRE -> {
+                val acres = totalSqFt / SQ_FEET_PER_ACRE
+                "${String.format(Locale.US, "%.3f", acres)} Acre (${String.format(Locale.US, "%,.0f", totalSqFt)} sq. ft.)"
+            }
+            KILLA_KANAL -> {
+                val killa = floor(totalSqFt / SQ_FEET_PER_ACRE).toInt()
+                val remAfterKilla = totalSqFt % SQ_FEET_PER_ACRE
+                val kanal = floor(remAfterKilla / SQ_FEET_PER_KANAL).toInt()
+                val remAfterKanal = remAfterKilla % SQ_FEET_PER_KANAL
+                val marla = round(remAfterKanal / SQ_FEET_PER_MARLA).toInt()
+
+                val parts = mutableListOf<String>()
+                if (killa > 0) parts.add("$killa Killa")
+                if (kanal > 0 || killa > 0) parts.add("$kanal Kanal")
+                parts.add("$marla Marla")
+                parts.joinToString(" - ")
+            }
+            HECTARE -> {
+                val ha = sqMeters / SQ_METERS_PER_HECTARE
+                "${String.format(Locale.US, "%.4f", ha)} Hectare (${String.format(Locale.US, "%,.1f", sqMeters)} sq. m)"
+            }
         }
-        return "${String.format(Locale.US, "%,.1f", converted)} $areaUnit"
     }
 }
 
@@ -509,7 +538,6 @@ actual fun MapScreen() {
     var distanceInputText by remember { mutableStateOf("") }
     var editingEdgeIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Replaces selectedVastuZone to support the hybrid dialog
     var selectedVastuPada by remember { mutableStateOf<VastuPada?>(null) }
 
     var hasFineLocationPermission by remember {
@@ -924,13 +952,17 @@ actual fun MapScreen() {
                                             selectedUnit = unit
                                             unitDropdownExpanded = false
                                         }) {
+                                            val hint = when(unit) {
+                                                PlotUnit.METERS -> "m.cm"
+                                                PlotUnit.FEET -> "ft.in"
+                                                PlotUnit.CENTIMETERS -> "cm.mm"
+                                                PlotUnit.INCHES -> "in.frac"
+                                                PlotUnit.ACRE -> "1 Acre = 43,560 sq ft"
+                                                PlotUnit.KILLA_KANAL -> "1 Killa = 8 Kanal = 160 Marla"
+                                                PlotUnit.HECTARE -> "1 Ha = 10,000 sq m"
+                                            }
                                             Text(
-                                                text = "${unit.displayName} (x.y = ${when(unit) {
-                                                    PlotUnit.METERS -> "m.cm"
-                                                    PlotUnit.FEET -> "ft.in"
-                                                    PlotUnit.CENTIMETERS -> "cm.mm"
-                                                    PlotUnit.INCHES -> "in.frac"
-                                                }})",
+                                                text = "${unit.displayName} ($hint)",
                                                 fontSize = 12.sp,
                                                 fontWeight = if (selectedUnit == unit) FontWeight.ExtraBold else FontWeight.Normal,
                                                 color = if (selectedUnit == unit) Saffron else Color(0xFF1E293B)
@@ -1087,8 +1119,8 @@ actual fun MapScreen() {
             val nextIndex = corners.size
 
             val unitHelper = when (selectedUnit) {
-                PlotUnit.METERS -> "m.cm (e.g. 10.50)"
-                PlotUnit.FEET -> "ft.in (e.g. 12.6 = 12ft 6in)"
+                PlotUnit.METERS, PlotUnit.HECTARE -> "m.cm (e.g. 10.50)"
+                PlotUnit.FEET, PlotUnit.ACRE, PlotUnit.KILLA_KANAL -> "ft.in (e.g. 12.6 = 12ft 6in)"
                 PlotUnit.CENTIMETERS -> "cm.mm (e.g. 120.5)"
                 PlotUnit.INCHES -> "in.frac (e.g. 48.4)"
             }
