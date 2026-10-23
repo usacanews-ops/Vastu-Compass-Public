@@ -266,7 +266,7 @@ fun CompassScreen() {
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = if (pada.isFavorableEntrance) "FAVORABLE DOOR" else "AVOID DOOR",
+                                        text = text = if (pada.isFavorableEntrance) "GOOD MAIN ENTRANCE" else "AVOID MAIN ENTRANCE",
                                         color = if (pada.isFavorableEntrance) Color(0xFF2E7D32) else Color(0xFFC62828),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp
