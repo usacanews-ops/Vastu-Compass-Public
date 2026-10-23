@@ -15,10 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlin.random.Random
 
 object VastuRepository {
-    // UPDATED: Pointing to the new hybrid vastu2.json
     private const val LIVE_DATA_URL = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/vastu2.json"
     private const val LIVE_PRODUCTS_URL = "https://myfreetools.app/wp-content/plugins/apps/vastuconsultant/assets/products.json"
 
@@ -28,7 +26,7 @@ object VastuRepository {
     private val jsonFormat = Json {
         ignoreUnknownKeys = true
         isLenient = true
-        coerceInputValues = true // Ensures safety with the new hybrid JSON structure
+        coerceInputValues = true
     }
 
     private val _dataFlow = MutableStateFlow<VastuDataPackage?>(null)
@@ -41,7 +39,7 @@ object VastuRepository {
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     suspend fun initialize() {
-        // 1. Cargar base de datos local de Vastu
+        // 1. Load local cached Vastu database immediately for instant offline use
         try {
             val cachedJson = storage.loadData("vastu_db")
             if (!cachedJson.isNullOrBlank()) {
@@ -55,7 +53,7 @@ object VastuRepository {
             e.printStackTrace()
         }
 
-        // 2. Cargar productos locales en caché
+        // 2. Load local cached products immediately
         try {
             val cachedProductsJson = storage.loadData("products_db")
             if (!cachedProductsJson.isNullOrBlank()) {
@@ -66,7 +64,7 @@ object VastuRepository {
             e.printStackTrace()
         }
 
-        // 3. Sincronizar datos con el servidor remoto
+        // 3. Check version differences in background and sync only if newer version exists
         CoroutineScope(Dispatchers.Default).launch {
             syncWithLiveServer()
         }
@@ -75,15 +73,13 @@ object VastuRepository {
     suspend fun syncWithLiveServer(): String {
         _isSyncing.value = true
         return try {
-            val cacheBuster = Random.nextInt(10000, 99999)
-
-            // A. Sincronización de vastu2.json
-            val url = "$LIVE_DATA_URL?v=$cacheBuster"
-            val response = client.get(url).bodyAsText()
+            // A. Vastu2.json Version Check & Sync
+            val response = client.get(LIVE_DATA_URL).bodyAsText()
             val remoteData = jsonFormat.decodeFromString<VastuDataPackage>(response)
             val currentData = _dataFlow.value
 
-            val syncStatusMessage = if (currentData == null || remoteData.version >= currentData.version) {
+            // ONLY sync and save if remote version is strictly greater than local version, or if local is empty
+            val syncStatusMessage = if (currentData == null || remoteData.version > currentData.version) {
                 _dataFlow.value = remoteData
                 storage.saveData("vastu_db", response)
                 CoroutineScope(Dispatchers.Default).launch {
@@ -94,13 +90,22 @@ object VastuRepository {
                 "Already up to date (Version ${currentData.version})"
             }
 
-            // B. Sincronización de products.json
+            // B. Products.json Version Check & Sync
             try {
-                val prodUrl = "$LIVE_PRODUCTS_URL?v=$cacheBuster"
-                val prodResponse = client.get(prodUrl).bodyAsText()
-                val remoteProducts = jsonFormat.decodeFromString<ProductPackage>(prodResponse)
-                _productsFlow.value = remoteProducts.products
-                storage.saveData("products_db", prodResponse)
+                val prodResponse = client.get(LIVE_PRODUCTS_URL).bodyAsText()
+                val remoteProductsPkg = jsonFormat.decodeFromString<ProductPackage>(prodResponse)
+                
+                val cachedProductsJson = storage.loadData("products_db")
+                val currentProductsPkg = if (!cachedProductsJson.isNullOrBlank()) {
+                    runCatching { jsonFormat.decodeFromString<ProductPackage>(cachedProductsJson) }.getOrNull()
+                } else null
+
+                if (currentProductsPkg == null || remoteProductsPkg.version > currentProductsPkg.version) {
+                    _productsFlow.value = remoteProductsPkg.products
+                    storage.saveData("products_db", prodResponse)
+                } else if (_productsFlow.value.isEmpty() && currentProductsPkg != null) {
+                    _productsFlow.value = currentProductsPkg.products
+                }
             } catch (pe: Exception) {
                 pe.printStackTrace()
             }
