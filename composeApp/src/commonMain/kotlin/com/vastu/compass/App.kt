@@ -1,16 +1,15 @@
 package com.vastu.compass
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.vastu.compass.data.VastuRepository
+import com.vastu.compass.ui.CompassScreen
 import kotlinx.coroutines.launch
 
 // Core Theme Colors
@@ -22,7 +21,7 @@ val VastuGreen = Color(0xFF2E7D32)
 fun App() {
     val coroutineScope = rememberCoroutineScope()
 
-    // Trigger background initialization on app launch without blocking the UI
+    // Initialize repository in background without blocking the UI
     LaunchedEffect(Unit) {
         coroutineScope.launch {
             VastuRepository.initialize()
@@ -34,8 +33,7 @@ fun App() {
             modifier = Modifier.fillMaxSize(),
             color = BeigeBackground
         ) {
-            // App loads instantly. Main navigation renders right away.
-            MainNavigationHost()
+            CompassScreen()
         }
     }
 }
